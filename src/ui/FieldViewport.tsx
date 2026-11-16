@@ -28,6 +28,7 @@ import {
   SectionId,
   ShowIntelligenceReport
 } from '../core/types.ts';
+import { computeTransitionXCounts, formatXCountsSummary } from '../core/xcounts.ts';
 
 export type ViewportToolMode = 'SELECT' | 'MOVE' | 'CURVE' | 'PIN';
 
@@ -1329,6 +1330,24 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
           comparisonField
         )
       : null;
+  const hudActiveWindow = getTransitionWindow(show, activeSetIndex);
+  let focusedXCountsText = 'Hold';
+  if (
+    focusedId &&
+    focusedState &&
+    hudActiveWindow &&
+    hudActiveWindow.counts > 0 &&
+    focusedState.isMoving
+  ) {
+    const p0 = hudActiveWindow.fromSet.positions[focusedId];
+    const p1 = hudActiveWindow.toSet.positions[focusedId];
+    if (p0 && p1) {
+      focusedXCountsText = formatXCountsSummary(
+        computeTransitionXCounts(p0, p1, hudActiveWindow.counts, field),
+        'In-corridor'
+      );
+    }
+  }
 
   return (
     <div className="viewport-wrap" ref={containerRef}>
@@ -1429,6 +1448,9 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
                 ).toFixed(1)}{' '}
                 ms
               </strong>
+            </span>
+            <span>
+              xCounts: <strong className="mono" style={{ color: '#67e8f9' }}>{focusedXCountsText}</strong>
             </span>
             <span>
               Body: <strong style={{ color: '#fef08a' }}>{focusedState.bodyState.postureLabel}</strong>{' '}
