@@ -1,3 +1,4 @@
+import { getPerformerSetPhraseSummary } from './choreography.ts';
 import {
   computeHashTranslationDelta,
   formatCoordinateSheetText,
@@ -36,6 +37,7 @@ export interface DotBookEntry {
   leftNeighborLabel: string | null;
   rightNeighborLabel: string | null;
   acousticDelayMs: number;
+  bodySummaryText: string;
   notes: string;
 }
 
@@ -113,6 +115,13 @@ export function generatePerformerDotBook(
       }
     }
 
+    const nextWin = getTransitionWindow(show, i);
+    const bodySummaryText = getPerformerSetPhraseSummary(
+      performer,
+      set,
+      nextWin ? nextWin.counts : 0
+    );
+
     entries.push({
       setIndex: i,
       setId: set.id,
@@ -129,6 +138,7 @@ export function generatePerformerDotBook(
       leftNeighborLabel: bestLeft?.label ?? null,
       rightNeighborLabel: bestRight?.label ?? null,
       acousticDelayMs: Math.round(computeAcousticDelayMs(dot, show.ambientTempCelsius) * 10) / 10,
+      bodySummaryText,
       notes: set.notes
     });
   }
@@ -155,8 +165,8 @@ export function exportDotBookMarkdown(book: PerformerDotBook): string {
       ? `**Venue Hash Comparison:** ${book.venueComparisonName}`
       : '',
     '',
-    '| Set | Mark | Counts | Tempo | Horizontal | Front-Back | Stride & Path | Dress Neighbors | Sound Lag |',
-    '| :--- | :--- | ---: | ---: | :--- | :--- | :--- | :--- | ---: |'
+    '| Set | Mark | Counts | Tempo | Horizontal | Front-Back | Stride & Path | Body & Horn Visuals | Dress Neighbors | Sound Lag |',
+    '| :--- | :--- | ---: | ---: | :--- | :--- | :--- | :--- | :--- | ---: |'
   ].filter(Boolean);
 
   for (const e of book.entries) {
@@ -167,7 +177,7 @@ export function exportDotBookMarkdown(book: PerformerDotBook): string {
       .filter(Boolean)
       .join(' / ');
     lines.push(
-      `| ${e.setName} | ${e.rehearsalMark} | ${e.countsFromPrev} | ${e.tempoBpm} | ${e.horizontalText} | ${e.verticalText} | ${e.stepSizeText} (${e.pathTypeText}) | ${neighbors || 'Open interval'} | ${e.acousticDelayMs} ms |`
+      `| ${e.setName} | ${e.rehearsalMark} | ${e.countsFromPrev} | ${e.tempoBpm} | ${e.horizontalText} | ${e.verticalText} | ${e.stepSizeText} (${e.pathTypeText}) | ${e.bodySummaryText} | ${neighbors || 'Open interval'} | ${e.acousticDelayMs} ms |`
     );
   }
 
