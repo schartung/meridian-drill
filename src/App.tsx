@@ -52,7 +52,7 @@ import { InspectorSidebar, InspectorTabId } from './ui/InspectorSidebar.tsx';
 import { IntentCommandBar } from './ui/IntentCommandBar.tsx';
 import { TimelineBar } from './ui/TimelineBar.tsx';
 
-const STORAGE_KEY = 'meridian_drill_v1_state';
+const STORAGE_KEY = 'meridian_drill_v1_1_state';
 
 function loadInitialShow(): DrillShow {
   try {
@@ -89,6 +89,7 @@ export const App: React.FC = () => {
     paths: true,
     acousticRings: true,
     collisions: true,
+    bodyVisuals: true,
     labels: false,
     snapHalfStep: false
   });
@@ -236,7 +237,15 @@ export const App: React.FC = () => {
   }, [intentPrompt, show, activeSetIndex, selectedIds, lockSections, handleRunLens]);
 
   const handleQuickLens = useCallback(
-    (preset: 'OPTIMIZE' | 'DEFLECT' | 'ARC' | 'COMPANY_FRONT' | 'ACOUSTIC') => {
+    (
+      preset:
+        | 'OPTIMIZE'
+        | 'DEFLECT'
+        | 'ARC'
+        | 'COMPANY_FRONT'
+        | 'ACOUSTIC'
+        | 'RIPPLE_SNAP'
+    ) => {
       const transitionIdx = Math.min(
         Math.max(0, activeSetIndex),
         Math.max(0, show.sets.length - 2)
@@ -283,6 +292,25 @@ export const App: React.FC = () => {
           spanMeters: field.id === 'JMBA_30M' ? 24 : 36.576,
           depthMeters: 0,
           assignOptimallyFromPrev: true
+        });
+      } else if (preset === 'RIPPLE_SNAP') {
+        const brassIds = show.performers
+          .filter((p) => p.section === 'BRASS')
+          .map((p) => p.id);
+        const win = getTransitionWindow(show, activeSetIndex);
+        const maxCts = win && win.counts > 0 ? win.counts : 16;
+        handleRunLens({
+          kind: 'STAMP_BODY_CUE',
+          setIndex: activeSetIndex,
+          performerIds: brassIds,
+          startCount: 0,
+          endCount: maxCts,
+          rippleDelayCounts: 0.4,
+          rippleOrder: 'LEFT_TO_RIGHT',
+          posture: 'LUNGE_LEFT',
+          hornCarriage: 'HORNS_SNAP_UP',
+          upperFacing: 'PRESS_BOX',
+          label: 'Brass Lunge + Horn-Snap Ripple'
         });
       } else {
         handleRunLens({
@@ -600,6 +628,7 @@ export const App: React.FC = () => {
                     ['paths', 'Motion Paths'],
                     ['acousticRings', 'Acoustic Rings'],
                     ['collisions', 'Collision Halos'],
+                    ['bodyVisuals', 'Body & Horn Cues'],
                     ['labels', 'Performer Labels'],
                     ['snapHalfStep', '0.5-Step Snap']
                   ] as Array<[keyof ViewportOverlays, string]>
@@ -658,6 +687,7 @@ export const App: React.FC = () => {
           activeTab={inspectorTab}
           onTabChange={setInspectorTab}
           activeSetIndex={activeSetIndex}
+          countOffset={countOffset}
           selectedIds={selectedIds}
           collaboratorRole={collaboratorRole}
           intelligence={intelligence}
@@ -682,6 +712,19 @@ export const App: React.FC = () => {
               });
             }
           }}
+          onDeleteBodyCue={(setIdx, cueId) =>
+            setShow((prev) => ({
+              ...prev,
+              sets: prev.sets.map((s, idx) =>
+                idx === setIdx
+                  ? {
+                      ...s,
+                      bodyCues: (s.bodyCues ?? []).filter((c) => c.id !== cueId)
+                    }
+                  : s
+              )
+            }))
+          }
           onAddPin={(cat, msg, perfId) => {
             const setPos = show.sets[activeSetIndex]?.positions;
             const dot = perfId && setPos ? setPos[perfId] : undefined;
@@ -775,6 +818,7 @@ export const App: React.FC = () => {
         isPlaying={isPlaying}
         playbackSpeed={playbackSpeed}
         audioEnabled={audioEnabled}
+        focusedPerformerId={selectedIds[0] ?? show.performers[0]!.id}
         onTogglePlay={() => setIsPlaying((p) => !p)}
         onStepCount={(delta) => {
           setIsPlaying(false);
@@ -789,6 +833,10 @@ export const App: React.FC = () => {
           setIsPlaying(false);
           setActiveSetIndex(setIdx);
           setCountOffset(0);
+        }}
+        onJumpToCountOffset={(cOff) => {
+          setIsPlaying(false);
+          setCountOffset(cOff);
         }}
         onScrubGlobalCount={(gCount) => {
           setIsPlaying(false);
