@@ -18,8 +18,10 @@ import {
   FieldPin,
   FieldStandardId,
   Performer,
+  ShowAudioMeta,
   ShowIntelligenceReport
 } from './types.ts';
+import { computeTransitionXCounts, formatXCountsSummary } from './xcounts.ts';
 
 export interface DotBookEntry {
   setIndex: number;
@@ -34,6 +36,7 @@ export interface DotBookEntry {
   venueTranslationNote: string | null;
   stepSizeText: string;
   pathTypeText: string;
+  xCountsText: string;
   leftNeighborLabel: string | null;
   rightNeighborLabel: string | null;
   acousticDelayMs: number;
@@ -77,6 +80,7 @@ export function generatePerformerDotBook(
 
     let stepSizeText = 'Opening Set';
     let pathTypeText = 'Anchor';
+    let xCountsText = 'Anchor';
     if (i > 0) {
       const win = getTransitionWindow(show, i - 1);
       const prevDot = win?.fromSet.positions[performer.id];
@@ -85,6 +89,7 @@ export function generatePerformerDotBook(
         if (arcLen < 0.05) {
           stepSizeText = `Hold (${win.counts} cts)`;
           pathTypeText = 'Stationary';
+          xCountsText = 'Stationary';
         } else {
           const stepLen = arcLen / win.counts;
           const stepsPerFive = field.majorLineSpacingMeters / stepLen;
@@ -94,6 +99,8 @@ export function generatePerformerDotBook(
             Math.abs(curve) > 0.05
               ? `Curved arc (${curve > 0 ? '+' : ''}${curve.toFixed(1)}m)`
               : 'Straight path';
+          const xCrossings = computeTransitionXCounts(prevDot, dot, win.counts, field);
+          xCountsText = formatXCountsSummary(xCrossings, 'In-corridor');
         }
       }
     }
@@ -135,6 +142,7 @@ export function generatePerformerDotBook(
       venueTranslationNote: venueNote,
       stepSizeText,
       pathTypeText,
+      xCountsText,
       leftNeighborLabel: bestLeft?.label ?? null,
       rightNeighborLabel: bestRight?.label ?? null,
       acousticDelayMs: Math.round(computeAcousticDelayMs(dot, show.ambientTempCelsius) * 10) / 10,
@@ -165,8 +173,8 @@ export function exportDotBookMarkdown(book: PerformerDotBook): string {
       ? `**Venue Hash Comparison:** ${book.venueComparisonName}`
       : '',
     '',
-    '| Set | Mark | Counts | Tempo | Horizontal | Front-Back | Stride & Path | Body & Horn Visuals | Dress Neighbors | Sound Lag |',
-    '| :--- | :--- | ---: | ---: | :--- | :--- | :--- | :--- | :--- | ---: |'
+    '| Set | Mark | Counts | Tempo | Horizontal | Front-Back | Stride & Path | xCounts | Body & Horn Visuals | Dress Neighbors | Sound Lag |',
+    '| :--- | :--- | ---: | ---: | :--- | :--- | :--- | :--- | :--- | :--- | ---: |'
   ].filter(Boolean);
 
   for (const e of book.entries) {
@@ -177,7 +185,7 @@ export function exportDotBookMarkdown(book: PerformerDotBook): string {
       .filter(Boolean)
       .join(' / ');
     lines.push(
-      `| ${e.setName} | ${e.rehearsalMark} | ${e.countsFromPrev} | ${e.tempoBpm} | ${e.horizontalText} | ${e.verticalText} | ${e.stepSizeText} (${e.pathTypeText}) | ${e.bodySummaryText} | ${neighbors || 'Open interval'} | ${e.acousticDelayMs} ms |`
+      `| ${e.setName} | ${e.rehearsalMark} | ${e.countsFromPrev} | ${e.tempoBpm} | ${e.horizontalText} | ${e.verticalText} | ${e.stepSizeText} (${e.pathTypeText}) | ${e.xCountsText} | ${e.bodySummaryText} | ${neighbors || 'Open interval'} | ${e.acousticDelayMs} ms |`
     );
   }
 
@@ -301,6 +309,21 @@ export function parseShowBundle(
     }
   }
 
+  const rawAudio = candidate.audioMeta;
+  const audioMeta: ShowAudioMeta | undefined =
+    rawAudio &&
+    typeof rawAudio === 'object' &&
+    typeof rawAudio.trackLabel === 'string' &&
+    typeof rawAudio.durationSeconds === 'number' &&
+    Number.isFinite(rawAudio.durationSeconds) &&
+    typeof rawAudio.beatOffsetSeconds === 'number' &&
+    Number.isFinite(rawAudio.beatOffsetSeconds) &&
+    (rawAudio.sourceKind === 'SYNTH_DEMO' ||
+      rawAudio.sourceKind === 'UPLOADED_FILE' ||
+      rawAudio.sourceKind === 'EXTRACTED_3DZ')
+      ? rawAudio
+      : undefined;
+
   return {
     ok: true,
     show: {
@@ -314,6 +337,7 @@ export function parseShowBundle(
         Number.isFinite(candidate.ambientTempCelsius)
           ? candidate.ambientTempCelsius
           : 20,
+      ...(audioMeta ? { audioMeta } : {}),
       performers: candidate.performers,
       sets: candidate.sets,
       pins: Array.isArray(candidate.pins) ? candidate.pins : [],
