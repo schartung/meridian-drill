@@ -1,3 +1,8 @@
+import {
+  formatEquipmentCoaching,
+  orderPerformersForRipple,
+  POSTURE_SPECS
+} from './choreography.ts';
 import { getFieldSpec } from './fields.ts';
 import { clampPointToFieldEnvelope, generateFormByShape } from './forms.ts';
 import { solveMinCostAssignment } from './hungarian.ts';
@@ -10,6 +15,8 @@ import {
 } from './intelligence.ts';
 import { getTransitionWindow } from './interpolation.ts';
 import {
+  BodyCue,
+  BodyPostureId,
   CanonicalPoint,
   DrillLensSpec,
   DrillSet,
@@ -17,8 +24,11 @@ import {
   FieldSpec,
   FormShape,
   HarnessRunReceipt,
+  HornCarriageId,
   PerformerDot,
-  SectionId
+  RippleOrderMode,
+  SectionId,
+  UpperFacingMode
 } from './types.ts';
 
 export type HarnessResult =
@@ -34,7 +44,13 @@ function cloneSets(sets: DrillSet[]): DrillSet[] {
     ...set,
     positions: Object.fromEntries(
       Object.entries(set.positions).map(([k, v]) => [k, { ...v }])
-    )
+    ),
+    bodyCues: set.bodyCues
+      ? set.bodyCues.map((cue) => ({
+          ...cue,
+          targetPerformerIds: [...cue.targetPerformerIds]
+        }))
+      : undefined
   }));
 }
 
@@ -80,6 +96,15 @@ function describeLens(show: DrillShow, lens: DrillLensSpec): string {
     case 'COMPACT_ACOUSTIC': {
       const setName = show.sets[lens.setIndex]?.name ?? `Set ${lens.setIndex + 1}`;
       return `Compact ${lens.targetSections.join('/')} under ${lens.maxDelayMs}ms on ${setName}`;
+    }
+    case 'STAMP_BODY_CUE': {
+      const setName = show.sets[lens.setIndex]?.name ?? `Set ${lens.setIndex + 1}`;
+      const postureName = POSTURE_SPECS[lens.posture].label;
+      const rippleNote =
+        lens.rippleDelayCounts > 0
+          ? ` (+${lens.rippleDelayCounts}ct ripple)`
+          : '';
+      return `Stamp ${postureName}${rippleNote} for ${lens.performerIds.length} performers on ${setName}`;
     }
   }
 }
@@ -385,6 +410,89 @@ export function executeHarnessLens(
         affectedPerformerIds.push(perf.id);
       }
     }
+  } else if (lens.kind === 'STAMP_BODY_CUE') {
+    if (lens.setIndex < 0 || lens.setIndex >= workingSets.length) {
+      return {
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        error: `Set index ${lens.setIndex} is out of range.`
+      };
+    }
+    if (lens.performerIds.length === 0) {
+      return {
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        error: 'Body cue requires at least one performer.'
+      };
+    }
+    if (lens.startCount < 0 || lens.endCount < lens.startCount) {
+      return {
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        error: `Invalid count window [${lens.startCount}, ${lens.endCount}] for body cue.`
+      };
+    }
+
+    const validIds = new Set(show.performers.map((p) => p.id));
+    for (const id of lens.performerIds) {
+      if (!validIds.has(id)) {
+        return {
+          ok: false,
+          code: 'PRECONDITION_FAILED',
+          error: `Unknown performer ID in body cue: ${id}`
+        };
+      }
+    }
+
+    anchorSetIndex = lens.setIndex;
+    targetSetIndex =
+      lens.setIndex < workingSets.length - 1 ? lens.setIndex + 1 : lens.setIndex;
+    const targetSet = workingSets[lens.setIndex]!;
+    const orderedIds = orderPerformersForRipple(
+      lens.performerIds,
+      targetSet.positions,
+      lens.rippleOrder
+    );
+
+    const firstPerf = show.performers.find((p) => p.id === orderedIds[0]);
+    const eq = formatEquipmentCoaching(
+      firstPerf?.section ?? 'BRASS',
+      lens.hornCarriage,
+      lens.upperFacing
+    );
+    const postureSpec = POSTURE_SPECS[lens.posture];
+    const cueLabel =
+      lens.label?.trim() ||
+      `${postureSpec.label}${lens.rippleDelayCounts > 0 ? ' Ripple' : ''}`;
+
+    const newCue: BodyCue = {
+      id: `cue-${Date.now().toString(36)}-${orderedIds.length}`,
+      label: cueLabel,
+      targetPerformerIds: orderedIds,
+      startCount: lens.startCount,
+      endCount: lens.endCount,
+      rippleDelayCounts: Math.max(0, lens.rippleDelayCounts),
+      posture: lens.posture,
+      hornCarriage: lens.hornCarriage,
+      upperFacing: lens.upperFacing,
+      instruction: `${postureSpec.lowerBodyCoaching} ${eq.upperBodyCoaching}`,
+      videoRefUrl: lens.videoRefUrl?.trim() || undefined
+    };
+
+    const existing = targetSet.bodyCues ?? [];
+    const orderedSet = new Set(orderedIds);
+    // Replace exact overlapping cues targeting the exact same count range and performers.
+    const filtered = existing.filter((c) => {
+      const sameWindow =
+        Math.abs(c.startCount - newCue.startCount) < 1e-6 &&
+        Math.abs(c.endCount - newCue.endCount) < 1e-6;
+      if (!sameWindow) return true;
+      const overlap = c.targetPerformerIds.some((id) => orderedSet.has(id));
+      return !overlap;
+    });
+
+    targetSet.bodyCues = [...filtered, newCue];
+    affectedPerformerIds = orderedIds;
   }
 
   const beforeMetrics = summarizeTransitionMetrics(
@@ -547,6 +655,78 @@ export function parseNaturalLanguageIntent(
         targetSections: sections
       },
       explanation: `Parsed COMPACT_ACOUSTIC (<= ${maxDelayMs}ms) on Set ${activeSetIndex + 1}.`
+    };
+  }
+
+  // 3.5 Body Choreography & Ripple Cues
+  const bodyKeywordRegex =
+    /(ripple|kneel|lunge|jazz\s*run|plie|contrapposto|bow\s*drop|horns?\s*up|horns?\s*snap|horns?\s*down|horns?\s*box|high\s*bell)/;
+  if (bodyKeywordRegex.test(prompt)) {
+    let targetIds = selectedIds;
+    if (targetIds.length === 0) {
+      if (prompt.includes('brass')) {
+        targetIds = show.performers.filter((p) => p.section === 'BRASS').map((p) => p.id);
+      } else if (prompt.includes('battery') || prompt.includes('percussion')) {
+        targetIds = show.performers.filter((p) => p.section === 'BATTERY').map((p) => p.id);
+      } else if (prompt.includes('guard')) {
+        targetIds = show.performers.filter((p) => p.section === 'GUARD').map((p) => p.id);
+      } else {
+        targetIds = show.performers.filter((p) => p.section === 'BRASS').map((p) => p.id);
+      }
+    }
+
+    let posture: BodyPostureId = 'UPRIGHT_GLIDE';
+    if (prompt.includes('kneel')) posture = 'KNEEL_RIGHT';
+    else if (prompt.includes('lunge right') || prompt.includes('right lunge'))
+      posture = 'LUNGE_RIGHT';
+    else if (prompt.includes('lunge')) posture = 'LUNGE_LEFT';
+    else if (/jazz\s*run/.test(prompt)) posture = 'JAZZ_RUN';
+    else if (prompt.includes('plie')) posture = 'HALF_TIME_PLIE';
+    else if (prompt.includes('contrapposto') || prompt.includes('lean'))
+      posture = 'CONTRAPPOSTO_LEAN';
+    else if (prompt.includes('bow')) posture = 'BOW_DROP';
+
+    let hornCarriage: HornCarriageId = 'HORNS_BOX';
+    if (prompt.includes('high bell')) hornCarriage = 'HIGH_BELL_EXTENSION';
+    else if (prompt.includes('snap') || prompt.includes('horns up'))
+      hornCarriage = 'HORNS_SNAP_UP';
+    else if (prompt.includes('horns down') || prompt.includes('down'))
+      hornCarriage = 'HORNS_DOWN';
+    else if (prompt.includes('carry')) hornCarriage = 'HORNS_CARRY';
+
+    let upperFacing: UpperFacingMode = 'PRESS_BOX';
+    if (prompt.includes('backfield')) upperFacing = 'BACKFIELD';
+    else if (prompt.includes('podium')) upperFacing = 'PODIUM_50';
+    else if (prompt.includes('travel')) upperFacing = 'TRAVEL';
+    else if (prompt.includes('side 1')) upperFacing = 'SIDE_1';
+    else if (prompt.includes('side 2')) upperFacing = 'SIDE_2';
+
+    let rippleOrder: RippleOrderMode = 'LEFT_TO_RIGHT';
+    if (prompt.includes('right to left') || prompt.includes('side 2 to side 1')) {
+      rippleOrder = 'RIGHT_TO_LEFT';
+    } else if (prompt.includes('center out')) {
+      rippleOrder = 'CENTER_OUT';
+    }
+
+    const nextWin = getTransitionWindow(show, activeSetIndex);
+    const maxCts = nextWin && nextWin.counts > 0 ? nextWin.counts : 16;
+    const rippleDelayCounts = prompt.includes('ripple') ? 0.4 : 0;
+
+    return {
+      ok: true,
+      lens: {
+        kind: 'STAMP_BODY_CUE',
+        setIndex: activeSetIndex,
+        performerIds: targetIds,
+        startCount: 0,
+        endCount: maxCts,
+        rippleDelayCounts,
+        rippleOrder,
+        posture,
+        hornCarriage,
+        upperFacing
+      },
+      explanation: `Parsed STAMP_BODY_CUE (${POSTURE_SPECS[posture].label}) for ${targetIds.length} performers on Set ${activeSetIndex + 1}.`
     };
   }
 
