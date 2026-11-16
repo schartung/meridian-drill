@@ -55,7 +55,7 @@ export function buildCameraState(
   povState?: InterpolatedPerformerState
 ): CameraState {
   const safeZoom = Math.min(2.6, Math.max(0.45, zoom));
-  const fieldCenterY = field.depthMeters * 0.45;
+  const fieldCenterY = field.depthMeters * 0.36;
   const worldUp: Vec3 = { x: 0, y: 0, z: 1 };
 
   let eye: Vec3;
@@ -82,8 +82,8 @@ export function buildCameraState(
     const baseTarget: Vec3 = { x: 0, y: fieldCenterY, z: 0 };
     const baseDistance =
       preset === 'BOX_SCAFFOLD'
-        ? field.depthMeters * 0.88
-        : field.depthMeters * 1.25;
+        ? field.depthMeters * 0.94
+        : field.depthMeters * 1.34;
     const basePitch = preset === 'BOX_SCAFFOLD' ? 0.34 : 0.62;
     const pitch = Math.min(1.38, Math.max(0.14, basePitch + orbitPitchRad));
     const radius = baseDistance / safeZoom;
