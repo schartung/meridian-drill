@@ -97,6 +97,74 @@ export interface PerformerDot {
   focusTarget?: 'PRESS_BOX' | 'PODIUM' | 'BACKFIELD' | 'CENTER';
 }
 
+export type BodyPostureId =
+  | 'UPRIGHT_GLIDE'
+  | 'JAZZ_RUN'
+  | 'HALF_TIME_PLIE'
+  | 'LUNGE_LEFT'
+  | 'LUNGE_RIGHT'
+  | 'CONTRAPPOSTO_LEAN'
+  | 'KNEEL_RIGHT'
+  | 'BOW_DROP';
+
+export type HornCarriageId =
+  | 'HORNS_DOWN'
+  | 'HORNS_CARRY'
+  | 'HORNS_BOX'
+  | 'HORNS_SNAP_UP'
+  | 'HIGH_BELL_EXTENSION';
+
+export type UpperFacingMode =
+  | 'PRESS_BOX'
+  | 'TRAVEL'
+  | 'PODIUM_50'
+  | 'BACKFIELD'
+  | 'SIDE_1'
+  | 'SIDE_2';
+
+export type RippleOrderMode =
+  | 'LEFT_TO_RIGHT'
+  | 'RIGHT_TO_LEFT'
+  | 'CENTER_OUT'
+  | 'SELECTION_ORDER';
+
+export interface BodyCue {
+  id: string;
+  label: string;
+  targetPerformerIds: string[];
+  startCount: number;
+  endCount: number;
+  rippleDelayCounts: number;
+  posture: BodyPostureId;
+  hornCarriage: HornCarriageId;
+  upperFacing: UpperFacingMode;
+  instruction: string;
+  videoRefUrl?: string;
+}
+
+export interface ResolvedBodyState {
+  cueId: string | null;
+  cueLabel: string;
+  posture: BodyPostureId;
+  postureLabel: string;
+  postureShortCode: string;
+  markerShape2d: 'CIRCLE' | 'CAPSULE' | 'DIAMOND' | 'CHEVRON';
+  hornCarriage: HornCarriageId;
+  hornLabel: string;
+  upperFacing: UpperFacingMode;
+  upperFacingRad: number;
+  elevationMeters: number;
+  leanXMeters: number;
+  leanYMeters: number;
+  hornAngleDeg: number;
+  isPulseActive: boolean;
+  pulseProgress: number;
+  triggerCount: number;
+  lowerBodyCoaching: string;
+  upperBodyCoaching: string;
+  videoRefUrl?: string;
+}
+
 export interface DrillSet {
   id: string;
   name: string;
@@ -105,6 +173,7 @@ export interface DrillSet {
   tempoBpm: number;
   notes: string;
   positions: Record<string, PerformerDot>;
+  bodyCues?: BodyCue[];
 }
 
 export type CollaboratorRole = 'DESIGNER' | 'TECH' | 'PERFORMER';
@@ -173,6 +242,20 @@ export type DrillLensSpec =
       setIndex: number;
       maxDelayMs: number;
       targetSections: SectionId[];
+    }
+  | {
+      kind: 'STAMP_BODY_CUE';
+      setIndex: number;
+      performerIds: string[];
+      startCount: number;
+      endCount: number;
+      rippleDelayCounts: number;
+      rippleOrder: RippleOrderMode;
+      posture: BodyPostureId;
+      hornCarriage: HornCarriageId;
+      upperFacing: UpperFacingMode;
+      label?: string;
+      videoRefUrl?: string;
     };
 
 export interface TransitionSummaryMetrics {
@@ -221,6 +304,7 @@ export interface InterpolatedPerformerState {
   stepsPerFive: number;
   stepLengthMeters: number;
   isMoving: boolean;
+  bodyState: ResolvedBodyState;
 }
 
 export interface CollisionIssue {
@@ -272,11 +356,23 @@ export interface AcousticReport {
   worstPerformerId: string | null;
 }
 
+export interface BodyTransitionAlert {
+  id: string;
+  severity: 'WARNING' | 'CRITICAL';
+  fromSetIndex: number;
+  toSetIndex: number;
+  performerId: string;
+  endingPosture: BodyPostureId;
+  nextStepsPerFive: number;
+  message: string;
+}
+
 export interface ShowIntelligenceReport {
   cleanlinessScore: number;
   collisions: CollisionIssue[];
   strideAlerts: StrideAlert[];
   whiplashAlerts: WhiplashAlert[];
+  bodyAlerts: BodyTransitionAlert[];
   acoustic: AcousticReport;
   crossingCountsByTransition: number[];
 }
