@@ -1,3 +1,4 @@
+import { orderPerformersForRipple } from './choreography.ts';
 import {
   generateArcForm,
   generateCompanyFrontForm,
@@ -485,6 +486,29 @@ export function createDemoShow(): DrillShow {
     )
   };
 
+  const s1BrassOrdered = orderPerformersForRipple(
+    brassIds,
+    set1Positions,
+    'LEFT_TO_RIGHT'
+  );
+  const s5Side1Brass = orderPerformersForRipple(
+    brassIds.filter((id) => (set5Positions[id]?.xMeters ?? 0) < 0),
+    set5Positions,
+    'CENTER_OUT'
+  );
+  const s5Side2Brass = orderPerformersForRipple(
+    brassIds.filter((id) => (set5Positions[id]?.xMeters ?? 0) >= 0),
+    set5Positions,
+    'CENTER_OUT'
+  );
+  const s7InnerBrass = brassIds.filter(
+    (id) => Math.abs(set7Positions[id]?.xMeters ?? 0) <= 10.0
+  );
+  const s7OuterAndBattery = [
+    ...brassIds.filter((id) => Math.abs(set7Positions[id]?.xMeters ?? 0) > 10.0),
+    ...batteryIds
+  ];
+
   return {
     id: 'meridian-demo-mvt1',
     title: 'Kinetic Meridian — Mvt. I: Horizon & Impact',
@@ -499,8 +523,58 @@ export function createDemoShow(): DrillShow {
         rehearsalMark: 'M.1',
         counts: 0,
         tempoBpm: 152,
-        notes: 'Asymmetric diagonal scatter with Guard framing flanks and Battery chevron backfield.',
-        positions: set1Positions
+        notes: 'Brass open kneeling horns-down before rising cleanly into a left-to-right horn-snap ripple.',
+        positions: set1Positions,
+        bodyCues: [
+          {
+            id: 'cue-s1-brass-kneel',
+            label: 'Brass Opening Kneel',
+            targetPerformerIds: s1BrassOrdered,
+            startCount: 0,
+            endCount: 4,
+            rippleDelayCounts: 0,
+            posture: 'KNEEL_RIGHT',
+            hornCarriage: 'HORNS_DOWN',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Hold steady right-knee kneel for 4 counts before smooth recovery.'
+          },
+          {
+            id: 'cue-s1-guard-lean',
+            label: 'Guard Framing Contrapposto',
+            targetPerformerIds: [...guardLeftIds, ...guardRightIds],
+            startCount: 0,
+            endCount: 20,
+            rippleDelayCounts: 0,
+            posture: 'CONTRAPPOSTO_LEAN',
+            hornCarriage: 'HORNS_BOX',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Open shoulders diagonally toward the press box while gliding along wing arcs.'
+          },
+          {
+            id: 'cue-s1-brass-stand',
+            label: 'Brass Smooth Recovery',
+            targetPerformerIds: s1BrassOrdered,
+            startCount: 4,
+            endCount: 8,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_CARRY',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Push cleanly through front heel to full upright posture by count 8.'
+          },
+          {
+            id: 'cue-s1-horn-ripple',
+            label: 'Left-to-Right Horn Snap Ripple',
+            targetPerformerIds: s1BrassOrdered,
+            startCount: 8,
+            endCount: 20,
+            rippleDelayCounts: 0.35,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_SNAP_UP',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Snap horn sharply to +14 deg playing box on your personal ripple count.'
+          }
+        ]
       },
       {
         id: 'set-2',
@@ -508,8 +582,34 @@ export function createDemoShow(): DrillShow {
         rehearsalMark: 'M.9',
         counts: 20,
         tempoBpm: 152,
-        notes: 'Dual brass concert arcs unfold around Battery wedge impact.',
-        positions: set2Positions
+        notes: 'Dual brass concert arcs project to Press Box while Guard executes half-time plie.',
+        positions: set2Positions,
+        bodyCues: [
+          {
+            id: 'cue-s2-brass-box',
+            label: 'Full Brass Impact Box',
+            targetPerformerIds: brassIds,
+            startCount: 0,
+            endCount: 20,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_BOX',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Maintain even heel-to-toe glide and steady bell elevation across the arc.'
+          },
+          {
+            id: 'cue-s2-guard-plie',
+            label: 'Guard Half-Time Plie',
+            targetPerformerIds: [...guardLeftIds, ...guardRightIds],
+            startCount: 4,
+            endCount: 16,
+            rippleDelayCounts: 0,
+            posture: 'HALF_TIME_PLIE',
+            hornCarriage: 'HIGH_BELL_EXTENSION',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Sink smoothly through 2nd-position plie with overhead equipment extension.'
+          }
+        ]
       },
       {
         id: 'set-3',
@@ -518,7 +618,21 @@ export function createDemoShow(): DrillShow {
         counts: 20,
         tempoBpm: 156,
         notes: 'Sweeping 23-piece brass bow around center soloist; Battery locks behind Front Hash.',
-        positions: set3Positions
+        positions: set3Positions,
+        bodyCues: [
+          {
+            id: 'cue-s3-brass-box',
+            label: 'Sustained Bow Projection',
+            targetPerformerIds: brassIds,
+            startCount: 0,
+            endCount: 20,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_BOX',
+            upperFacing: 'PODIUM_50',
+            instruction: 'Angle shoulders slightly inward toward the 50-yard podium focal point.'
+          }
+        ]
       },
       {
         id: 'set-4',
@@ -527,7 +641,45 @@ export function createDemoShow(): DrillShow {
         counts: 16,
         tempoBpm: 160,
         notes: 'Sets up Brass/Guard center pass-through collision and crossed inner Brass slots into M.20.',
-        positions: set4Positions
+        positions: set4Positions,
+        bodyCues: [
+          {
+            id: 'cue-s4-brass-slide',
+            label: 'Lateral Horn-to-Box Slide',
+            targetPerformerIds: [...brassLeftIds, ...brassRightIds],
+            startCount: 0,
+            endCount: 16,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_BOX',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Keep hips traveling cleanly along lateral path while twisting waist square to Press Box.'
+          },
+          {
+            id: 'cue-s4-guard-jazz',
+            label: 'Soloist Jazz-Run Pass',
+            targetPerformerIds: [guardSoloId],
+            startCount: 0,
+            endCount: 16,
+            rippleDelayCounts: 0,
+            posture: 'JAZZ_RUN',
+            hornCarriage: 'HORNS_SNAP_UP',
+            upperFacing: 'TRAVEL',
+            instruction: 'Drive knees cleanly forward along the 50-yard corridor with upper body facing travel line.'
+          },
+          {
+            id: 'cue-s4-brass-jazz',
+            label: 'Mellophone Soloist Drive',
+            targetPerformerIds: [brassSoloId],
+            startCount: 0,
+            endCount: 16,
+            rippleDelayCounts: 0,
+            posture: 'JAZZ_RUN',
+            hornCarriage: 'HORNS_BOX',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Stay light on the balls of the feet while projecting horn straight ahead.'
+          }
+        ]
       },
       {
         id: 'set-5',
@@ -535,8 +687,46 @@ export function createDemoShow(): DrillShow {
         rehearsalMark: 'M.20',
         counts: 16,
         tempoBpm: 160,
-        notes: 'Brass Company Front on Front Hash; run AI Optimize + Curve Pass-Through to clean M.17 -> M.20.',
-        positions: set5Positions
+        notes: 'Center-out symmetric Company Front lunge and high-bell extension on Front Hash.',
+        positions: set5Positions,
+        bodyCues: [
+          {
+            id: 'cue-s5-lunge-left',
+            label: 'Side 1 Center-Out Lunge & High Bell',
+            targetPerformerIds: s5Side1Brass,
+            startCount: 0,
+            endCount: 10,
+            rippleDelayCounts: 0.25,
+            posture: 'LUNGE_LEFT',
+            hornCarriage: 'HIGH_BELL_EXTENSION',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Plant wide left lunge on your center-out ripple count and lift bell to +35 deg.'
+          },
+          {
+            id: 'cue-s5-lunge-right',
+            label: 'Side 2 Center-Out Lunge & High Bell',
+            targetPerformerIds: s5Side2Brass,
+            startCount: 0,
+            endCount: 10,
+            rippleDelayCounts: 0.25,
+            posture: 'LUNGE_RIGHT',
+            hornCarriage: 'HIGH_BELL_EXTENSION',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Plant wide right lunge on your center-out ripple count and lift bell to +35 deg.'
+          },
+          {
+            id: 'cue-s5-recover',
+            label: 'Ballad Release Recovery',
+            targetPerformerIds: brassIds,
+            startCount: 10,
+            endCount: 24,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_BOX',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Draw weighted leg smoothly underneath hips and lower bell to +10 deg box.'
+          }
+        ]
       },
       {
         id: 'set-6',
@@ -545,7 +735,21 @@ export function createDemoShow(): DrillShow {
         counts: 24,
         tempoBpm: 116,
         notes: 'Lyrical dual brass arcs opening across the field; Guard frames front sideline.',
-        positions: set6Positions
+        positions: set6Positions,
+        bodyCues: [
+          {
+            id: 'cue-s6-breath',
+            label: 'Lyrical Carry & Release',
+            targetPerformerIds: brassIds,
+            startCount: 0,
+            endCount: 20,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HORNS_CARRY',
+            upperFacing: 'PODIUM_50',
+            instruction: 'Relax shoulders during silent glide across the ballad phrase.'
+          }
+        ]
       },
       {
         id: 'set-7',
@@ -553,8 +757,34 @@ export function createDemoShow(): DrillShow {
         rehearsalMark: 'M.30',
         counts: 20,
         tempoBpm: 112,
-        notes: 'Symmetric chevron aimed directly at Press Box podium.',
-        positions: set7Positions
+        notes: 'Two-tier finale: inner Brass kneel at 1.05m while outer Brass & Battery project upright.',
+        positions: set7Positions,
+        bodyCues: [
+          {
+            id: 'cue-s7-front-kneel',
+            label: 'Apex Inner Tier Kneel',
+            targetPerformerIds: s7InnerBrass,
+            startCount: 0,
+            endCount: 0,
+            rippleDelayCounts: 0,
+            posture: 'KNEEL_RIGHT',
+            hornCarriage: 'HIGH_BELL_EXTENSION',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Drop onto right knee directly on set arrival for clear upper-tier sightlines.'
+          },
+          {
+            id: 'cue-s7-back-high',
+            label: 'Outer & Battery Full Extension',
+            targetPerformerIds: s7OuterAndBattery,
+            startCount: 0,
+            endCount: 0,
+            rippleDelayCounts: 0,
+            posture: 'UPRIGHT_GLIDE',
+            hornCarriage: 'HIGH_BELL_EXTENSION',
+            upperFacing: 'PRESS_BOX',
+            instruction: 'Stand tall behind kneeling apex tier and project full extension to Press Box.'
+          }
+        ]
       }
     ],
     pins: [
