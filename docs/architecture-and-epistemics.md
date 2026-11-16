@@ -34,12 +34,14 @@ Meridian V1 implements **Projected Context feeding Harness Production**:
 - **Stride Alerts:** `WARNING` below `6.0-to-5`, `CRITICAL` below `4.5-to-5`. *Most likely wrong if* an ensemble intentionally stages a high-velocity solo scatter or sprint feature for trained drum corps members.
 - **Momentum Whiplash:** Fires when consecutive active transitions turn more than `110°` while peak speed exceeds `1.5 m/s`, weighted by instrument mass factor (`1.55` for Tubas, `1.45` for Tenors). *Most likely wrong if* a halt or prep-step pause is inserted between sets inside musical counts without splitting the set.
 - **Acoustic Tear Risk:** Measured relative to Front Pit `(0, -2.0 m)` arriving at the Front Focal Listener `(0, -4.0 m)`. `MODERATE` above `65 ms` and `HIGH` above `85 ms`. *Most likely wrong if* a corps uses live backfield amplification or time-aligned PA speakers, or listens back-to-front instead of front-to-back.
+- **Kneel-to-Move Body Transition Hazard (`BodyTransitionAlert`):** Flags performers ending a transition in `KNEEL_RIGHT` (`1.05 m`) or `BOW_DROP` (`1.22 m`) and immediately starting the next move faster than `7.0-to-5` without recovery counts (`CRITICAL` below `5.5-to-5` or weight factor `>= 1.3`). *Most likely wrong if* choreography intentionally uses an explosive floor-to-sprint roll.
 - **Hungarian Stride Exponent (`2.2`):** Minimizing `distance^2.2` penalizes individual extreme step spikes more heavily than sum-of-distances (`p = 1`) while guaranteeing zero crossing paths.
 
 ### `gap` — Explicit V1 Scope Boundaries
 - **Multi-User Cloud Sync:** V1 runs offline-first in the browser with `localStorage` persistence and portable `.meridian.json` / `.md` bundles rather than a hosted WebSocket collaboration server.
 - **Show Music Audio Sync:** V1 includes a Web Audio API woodblock metronome synchronized to set BPM and counts; importing licensed MP3/WAV recordings with tempo-map beat grids is reserved for V2.
 - **External LLM API Routing:** V1's AI Intent Bar parses bounded natural-language commands deterministically offline so edits execute reliably in milliseconds with zero API key dependency or silent hallucination risk.
+- **Intricate Dance & Guard Spin Kinematics:** V1 models 8 core marching postures, 5 horn/equipment carriage levels, independent upper-body facing, and sequential ripples via an interactive Front + Side Mannequin Coach Card; custom floorwork or multi-plane guard tosses link to an optional external rehearsal video URL rather than full inverse-kinematic motion capture.
 
 ---
 
