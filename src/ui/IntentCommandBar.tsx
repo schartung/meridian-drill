@@ -7,7 +7,15 @@ interface IntentCommandBarProps {
   lockSections: boolean;
   onToggleLockSections: (val: boolean) => void;
   onSubmitPrompt: () => void;
-  onRunQuickLens: (preset: 'OPTIMIZE' | 'DEFLECT' | 'ARC' | 'COMPANY_FRONT' | 'ACOUSTIC') => void;
+  onRunQuickLens: (
+    preset:
+      | 'OPTIMIZE'
+      | 'DEFLECT'
+      | 'ARC'
+      | 'COMPANY_FRONT'
+      | 'ACOUSTIC'
+      | 'RIPPLE_SNAP'
+  ) => void;
   lastFeedback: { ok: boolean; text: string; receipt?: HarnessRunReceipt } | null;
   inputRef: React.RefObject<HTMLInputElement | null>;
   canEdit: boolean;
@@ -105,6 +113,14 @@ export const IntentCommandBar: React.FC<IntentCommandBarProps> = ({
           disabled={!canEdit}
         >
           Compact Acoustic Delay &lt;55ms
+        </button>
+        <button
+          type="button"
+          className="chip-btn"
+          onClick={() => onRunQuickLens('RIPPLE_SNAP')}
+          disabled={!canEdit}
+        >
+          Ripple Brass Horn-Snap
         </button>
       </div>
 
