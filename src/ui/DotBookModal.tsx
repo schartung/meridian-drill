@@ -205,6 +205,7 @@ export const DotBookModal: React.FC<DotBookModalProps> = ({
                 <th>Horizontal (Side / Yard)</th>
                 <th>Front-to-Back</th>
                 <th>Stride &amp; Path</th>
+                <th>xCounts</th>
                 <th>Body &amp; Horn Visuals</th>
                 <th>Dress Neighbors</th>
                 <th>Sound Lag</th>
@@ -234,6 +235,9 @@ export const DotBookModal: React.FC<DotBookModalProps> = ({
                     <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                       {entry.pathTypeText}
                     </div>
+                  </td>
+                  <td className="mono" style={{ fontSize: 11, color: '#67e8f9' }}>
+                    {entry.xCountsText}
                   </td>
                   <td style={{ fontSize: 11.5, color: '#e2e8f0' }}>
                     {entry.bodySummaryText}
