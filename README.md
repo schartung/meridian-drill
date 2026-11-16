@@ -26,6 +26,8 @@ npm run verify
 - **AI Intent Lens & Reversible Solver Harness:** Run natural-language commands (`Cmd/Ctrl + K`) or 1-click fixes (`Optimize Dot Assignment`, `Curve Pass-Through Collisions`, `Stage Brass Arc`, `Company Front`, `Compact Acoustic Delay <55ms`). Every run logs a materialized receipt with before/after deltas and lossless 1-click revert.
 - **Multi-Camera 2D + 3D Studio Viewport:** Switch between `2D Tactical` (`1`), `3D Judge High-Cam` (`2`), `3D Tech Box` (`3`), and `Performer POV` (`4`) with drag-to-orbit camera controls.
 - **Body Control, Posture Markers & Movement Coach:** Encode 8 core postures (kneels, lunges, plie, jazz run, contrapposto), 5 horn/equipment angles, independent upper-body facing, and count-based sequential ripples directly on 2D/3D field markers, taught outside the field view through a live-synced Front + Side Mannequin Coach Card, a clickable Timeline Phrase Strip, and Dot-Book breakdowns.
+- **Variable-Tempo Audio Waveform & `xCounts` Checkpoints:** Sync uploaded `.mp3`/`.wav`/`.ogg` recordings or 1-click synthesized Brass + Battery ensemble stems onto a hardware-locked variable-tempo waveform scrubber (`MM:SS.d`), and inspect exact `xCounts` yard-line and 5m grid crossing counts in the performer HUD and printable Dot-Books.
+- **Multi-Path Legacy / Pyware & MusicXML Importer:** Unpack `.3dz` ZIP packages to extract embedded audio and open tables cleanly, invert Pyware Coordinate Sheet CSV/TSV/Text exports onto canonical meters across all 5 field standards, import MusicXML variable tempos and rehearsal marks, and inspect proprietary binary `.3dj` payloads fail-closed with step-by-step Pyware CSV bridge instructions.
 - **Rehearsal Collaboration & Dot-Books:** Switch between `Designer`, `Field Tech`, and `Performer` roles, drop count-anchored Field Pins on turf, export Markdown Rehearsal Triage Sheets, inspect individual Performer Dot-Books, and share portable `.meridian.json` bundles.
 
 ## Keyboard Shortcuts
@@ -38,8 +40,8 @@ npm run verify
 
 ## Project Layout
 
-- `src/core/`: Pure TypeScript coordinate math, international field specs, Bezier interpolation, collision/stride/whiplash/acoustic intelligence, Hungarian solver, parametric forms, AI harness, 3D pinhole camera, Web Audio metronome, and collaboration exporters.
-- `src/ui/`: React + HiDPI `<canvas>` 2D/3D viewport, AI Intent Command Bar, Physics/Ledger/Collaborate/Form inspector drawer, timeline scrubber, and Dot-Book modal.
+- `src/core/`: Pure TypeScript coordinate math, international field specs, Bezier interpolation, `xCounts` crossing calculator, collision/stride/whiplash/acoustic intelligence, Hungarian solver, parametric forms, AI harness, 3D pinhole camera, Web Audio metronome & variable-tempo track sync, multi-path Pyware/MusicXML/.3dz importers, and collaboration exporters.
+- `src/ui/`: React + HiDPI `<canvas>` 2D/3D viewport, AI Intent Command Bar, Physics/Body/Ledger/Collaborate/Form inspector drawer, HiDPI waveform timeline scrubber, Import modal, and Dot-Book modal.
 - `tests/`: Closed-form unit invariant tests (including factorial brute-force verification of Hungarian optimality).
 - `scripts/verify-gates.mjs`: Automated build and invariant verification gate.
 - `docs/architecture-and-epistemics.md`: Provenance notes (`stated`, `concluded`, `gap`) and system trade-offs.
