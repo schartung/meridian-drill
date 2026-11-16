@@ -1,24 +1,44 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import {
+  HORN_CARRIAGE_LIST,
+  POSTURE_LIST,
+  UPPER_FACING_LABELS
+} from '../core/choreography.ts';
 import { formatSteps } from '../core/coordinates.ts';
 import { getFieldSpec } from '../core/fields.ts';
 import {
+  getTransitionWindow,
+  interpolateShowAtPosition
+} from '../core/interpolation.ts';
+import {
+  BodyPostureId,
   CollaboratorRole,
   DrillLensSpec,
   DrillSet,
   DrillShow,
   FormShape,
+  HornCarriageId,
   PinCategory,
   PinStatus,
-  ShowIntelligenceReport
+  RippleOrderMode,
+  ShowIntelligenceReport,
+  UpperFacingMode
 } from '../core/types.ts';
+import { MannequinPoseCard } from './MannequinPoseCard.tsx';
 
-export type InspectorTabId = 'INTELLIGENCE' | 'LEDGER' | 'COLLABORATE' | 'SET_FORM';
+export type InspectorTabId =
+  | 'INTELLIGENCE'
+  | 'BODY'
+  | 'LEDGER'
+  | 'COLLABORATE'
+  | 'SET_FORM';
 
 interface InspectorSidebarProps {
   show: DrillShow;
   activeTab: InspectorTabId;
   onTabChange: (tab: InspectorTabId) => void;
   activeSetIndex: number;
+  countOffset: number;
   selectedIds: string[];
   collaboratorRole: CollaboratorRole;
   intelligence: ShowIntelligenceReport;
@@ -31,6 +51,7 @@ interface InspectorSidebarProps {
   ) => void;
   onRunLens: (lens: DrillLensSpec) => void;
   onRevertReceipt: (receiptId: string) => void;
+  onDeleteBodyCue: (setIndex: number, cueId: string) => void;
   onAddPin: (
     category: PinCategory,
     message: string,
@@ -49,6 +70,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   activeTab,
   onTabChange,
   activeSetIndex,
+  countOffset,
   selectedIds,
   collaboratorRole,
   intelligence,
@@ -56,6 +78,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   onJumpToMoment,
   onRunLens,
   onRevertReceipt,
+  onDeleteBodyCue,
   onAddPin,
   onCyclePinStatus,
   onExportTriageMarkdown,
@@ -67,6 +90,28 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
   const field = getFieldSpec(show.fieldStandardId);
   const activeSet = show.sets[activeSetIndex]!;
   const canEditDrill = collaboratorRole === 'DESIGNER';
+  const activeWin = getTransitionWindow(show, activeSetIndex);
+  const maxTransitionCounts = activeWin ? activeWin.counts : 0;
+
+  // Body & Ripple Stamper local state
+  const [bodyTargetGroup, setBodyTargetGroup] = useState<'SELECTED' | 'BRASS' | 'BATTERY' | 'GUARD' | 'PIT'>('BRASS');
+  const [cueStartCount, setCueStartCount] = useState<number>(0);
+  const [cueEndCount, setCueEndCount] = useState<number>(Math.max(4, maxTransitionCounts || 16));
+  const [cuePosture, setCuePosture] = useState<BodyPostureId>('LUNGE_LEFT');
+  const [cueHorn, setCueHorn] = useState<HornCarriageId>('HORNS_SNAP_UP');
+  const [cueFacing, setCueFacing] = useState<UpperFacingMode>('PRESS_BOX');
+  const [cueRippleDelay, setCueRippleDelay] = useState<number>(0.4);
+  const [cueRippleOrder, setCueRippleOrder] = useState<RippleOrderMode>('LEFT_TO_RIGHT');
+  const [cueVideoUrl, setCueVideoUrl] = useState<string>('');
+
+  const interpolated = useMemo(
+    () => interpolateShowAtPosition(show, activeSetIndex, countOffset, field),
+    [show, activeSetIndex, countOffset, field]
+  );
+  const focusedId = selectedIds[0] ?? show.performers[0]!.id;
+  const focusedPerformer =
+    show.performers.find((p) => p.id === focusedId) ?? show.performers[0]!;
+  const focusedState = interpolated[focusedPerformer.id];
 
   // Collaborate tab local state
   const [pinFilter, setPinFilter] = useState<'ALL' | 'OPEN' | 'RESOLVED'>('ALL');
@@ -111,6 +156,33 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
     });
   };
 
+  const handleStampBodyCue = () => {
+    const ids =
+      bodyTargetGroup === 'SELECTED' && selectedIds.length > 0
+        ? selectedIds
+        : show.performers
+            .filter(
+              (p) =>
+                p.section ===
+                (bodyTargetGroup === 'SELECTED' ? 'BRASS' : bodyTargetGroup)
+            )
+            .map((p) => p.id);
+
+    onRunLens({
+      kind: 'STAMP_BODY_CUE',
+      setIndex: activeSetIndex,
+      performerIds: ids,
+      startCount: Math.max(0, cueStartCount),
+      endCount: Math.max(cueStartCount, cueEndCount),
+      rippleDelayCounts: cueRippleDelay,
+      rippleOrder: cueRippleOrder,
+      posture: cuePosture,
+      hornCarriage: cueHorn,
+      upperFacing: cueFacing,
+      videoRefUrl: cueVideoUrl.trim() || undefined
+    });
+  };
+
   return (
     <aside className="inspector-drawer">
       <div className="drawer-tabs">
@@ -119,14 +191,21 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
           className={`drawer-tab ${activeTab === 'INTELLIGENCE' ? 'active' : ''}`}
           onClick={() => onTabChange('INTELLIGENCE')}
         >
-          Physics ({intelligence.collisions.length + intelligence.strideAlerts.length})
+          Physics ({intelligence.collisions.length + intelligence.strideAlerts.length + intelligence.bodyAlerts.length})
+        </button>
+        <button
+          type="button"
+          className={`drawer-tab ${activeTab === 'BODY' ? 'active' : ''}`}
+          onClick={() => onTabChange('BODY')}
+        >
+          Body ({(activeSet.bodyCues ?? []).length})
         </button>
         <button
           type="button"
           className={`drawer-tab ${activeTab === 'LEDGER' ? 'active' : ''}`}
           onClick={() => onTabChange('LEDGER')}
         >
-          AI Ledger ({show.harnessLedger.length})
+          Ledger ({show.harnessLedger.length})
         </button>
         <button
           type="button"
@@ -140,7 +219,7 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
           className={`drawer-tab ${activeTab === 'SET_FORM' ? 'active' : ''}`}
           onClick={() => onTabChange('SET_FORM')}
         >
-          Set &amp; Form
+          Set
         </button>
       </div>
 
@@ -348,6 +427,252 @@ export const InspectorSidebar: React.FC<InspectorSidebarProps> = ({
                     </div>
                   ))}
                 </>
+              )}
+            </div>
+
+            {intelligence.bodyAlerts.length > 0 && (
+              <div className="card">
+                <div className="card-title">
+                  <span>Body Transition Hazards</span>
+                  <span>{intelligence.bodyAlerts.length}</span>
+                </div>
+                {intelligence.bodyAlerts.slice(0, 6).map((ba) => (
+                  <div
+                    key={ba.id}
+                    className={`issue-card ${ba.severity === 'CRITICAL' ? 'critical' : 'warning'}`}
+                  >
+                    <div className="issue-header">
+                      <span>{performerLabel(ba.performerId)} Kneel-to-Move</span>
+                      <span className="mono">
+                        Set {ba.fromSetIndex + 1}&rarr;{ba.toSetIndex + 1}
+                      </span>
+                    </div>
+                    <div className="issue-body">{ba.message}</div>
+                    <div className="issue-actions">
+                      <button
+                        type="button"
+                        className="mini-btn"
+                        onClick={() =>
+                          onJumpToMoment(ba.fromSetIndex, 0, [ba.performerId])
+                        }
+                      >
+                        Inspect
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'BODY' && (
+          <>
+            {focusedState && (
+              <MannequinPoseCard
+                performer={focusedPerformer}
+                state={focusedState}
+                setName={activeSet.name}
+                countOffset={countOffset}
+                maxCounts={maxTransitionCounts}
+              />
+            )}
+
+            <div className="card">
+              <div className="card-title">
+                <span>Choreography &amp; Ripple Stamper</span>
+                <span className="mono">Set {activeSetIndex + 1}</span>
+              </div>
+              <div className="form-grid">
+                <div className="field-group">
+                  <label>Performers</label>
+                  <select
+                    className="studio-select"
+                    value={bodyTargetGroup}
+                    onChange={(e) =>
+                      setBodyTargetGroup(
+                        e.target.value as 'SELECTED' | 'BRASS' | 'BATTERY' | 'GUARD' | 'PIT'
+                      )
+                    }
+                  >
+                    <option value="SELECTED">Selected ({selectedIds.length})</option>
+                    <option value="BRASS">All Brass (24)</option>
+                    <option value="BATTERY">All Battery (14)</option>
+                    <option value="GUARD">All Guard (16)</option>
+                    <option value="PIT">Front Pit (10)</option>
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label>Posture</label>
+                  <select
+                    className="studio-select"
+                    value={cuePosture}
+                    onChange={(e) => setCuePosture(e.target.value as BodyPostureId)}
+                  >
+                    {POSTURE_LIST.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="field-group">
+                  <label>Horn / Equipment</label>
+                  <select
+                    className="studio-select"
+                    value={cueHorn}
+                    onChange={(e) => setCueHorn(e.target.value as HornCarriageId)}
+                  >
+                    {HORN_CARRIAGE_LIST.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        {h.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label>Upper-Body Facing</label>
+                  <select
+                    className="studio-select"
+                    value={cueFacing}
+                    onChange={(e) => setCueFacing(e.target.value as UpperFacingMode)}
+                  >
+                    {(Object.keys(UPPER_FACING_LABELS) as UpperFacingMode[]).map((k) => (
+                      <option key={k} value={k}>
+                        {UPPER_FACING_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="field-group">
+                  <label>Start Count</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={64}
+                    step={0.5}
+                    className="studio-input"
+                    value={cueStartCount}
+                    onChange={(e) => setCueStartCount(Number(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label>End Count</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={64}
+                    step={0.5}
+                    className="studio-input"
+                    value={cueEndCount}
+                    onChange={(e) => setCueEndCount(Number(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="field-group">
+                  <label>Ripple Delay</label>
+                  <select
+                    className="studio-select"
+                    value={cueRippleDelay}
+                    onChange={(e) => setCueRippleDelay(Number(e.target.value))}
+                  >
+                    <option value={0}>Unison (0 ct)</option>
+                    <option value={0.25}>Fast (0.25 ct/dot)</option>
+                    <option value={0.4}>Standard (0.4 ct/dot)</option>
+                    <option value={0.5}>Wave (0.5 ct/dot)</option>
+                    <option value={1}>Slow (1.0 ct/dot)</option>
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label>Ripple Direction</label>
+                  <select
+                    className="studio-select"
+                    value={cueRippleOrder}
+                    onChange={(e) => setCueRippleOrder(e.target.value as RippleOrderMode)}
+                  >
+                    <option value="LEFT_TO_RIGHT">Left &rarr; Right (S1 to S2)</option>
+                    <option value="RIGHT_TO_LEFT">Right &rarr; Left (S2 to S1)</option>
+                    <option value="CENTER_OUT">Center &rarr; Out</option>
+                    <option value="SELECTION_ORDER">Selection Order</option>
+                  </select>
+                </div>
+              </div>
+              <div className="field-group">
+                <label>Optional Rehearsal Video Link</label>
+                <input
+                  type="url"
+                  className="studio-input"
+                  placeholder="https://..."
+                  value={cueVideoUrl}
+                  onChange={(e) => setCueVideoUrl(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                className="mini-btn accent"
+                disabled={!canEditDrill}
+                onClick={handleStampBodyCue}
+              >
+                Stamp Movement Cue onto Set {activeSetIndex + 1}
+              </button>
+            </div>
+
+            <div className="card">
+              <div className="card-title">
+                <span>Active Set Body Cues</span>
+                <span>{(activeSet.bodyCues ?? []).length}</span>
+              </div>
+              {(activeSet.bodyCues ?? []).length === 0 ? (
+                <div className="issue-body">
+                  No custom body cues on this set. Performers use baseline Upright Glide.
+                </div>
+              ) : (
+                (activeSet.bodyCues ?? []).map((cue) => (
+                  <div key={cue.id} className="issue-card resolved">
+                    <div className="issue-header">
+                      <span>{cue.label}</span>
+                      <span className="mono">
+                        cts {cue.startCount}-{cue.endCount}
+                      </span>
+                    </div>
+                    <div className="issue-body">
+                      {cue.targetPerformerIds.length} performers ·{' '}
+                      {cue.rippleDelayCounts > 0
+                        ? `+${cue.rippleDelayCounts}ct ripple`
+                        : 'Unison'}{' '}
+                      · {UPPER_FACING_LABELS[cue.upperFacing]}
+                    </div>
+                    <div className="issue-actions">
+                      <button
+                        type="button"
+                        className="mini-btn"
+                        onClick={() =>
+                          onJumpToMoment(
+                            activeSetIndex,
+                            cue.startCount,
+                            [cue.targetPerformerIds[0]!]
+                          )
+                        }
+                      >
+                        Jump to Cue
+                      </button>
+                      {canEditDrill && (
+                        <button
+                          type="button"
+                          className="mini-btn"
+                          onClick={() => onDeleteBodyCue(activeSetIndex, cue.id)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </>
