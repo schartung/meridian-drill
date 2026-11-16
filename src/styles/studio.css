@@ -534,7 +534,7 @@ textarea {
 
 .drawer-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-root);
 }
@@ -710,14 +710,103 @@ textarea {
 
 /* Bottom Musical Timeline */
 .timeline-bar {
-  height: 98px;
-  min-height: 98px;
+  height: 124px;
+  min-height: 124px;
   background: var(--bg-panel);
   border-top: 1px solid var(--border-subtle);
   padding: 8px 14px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
+}
+
+.phrase-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  overflow-x: auto;
+}
+
+.phrase-owner {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  white-space: nowrap;
+}
+
+.phrase-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-root);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.phrase-pill:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.phrase-pill.active {
+  background: rgba(254, 240, 138, 0.14);
+  border-color: rgba(254, 240, 138, 0.65);
+  color: #fef08a;
+}
+
+.mannequin-stage {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.mannequin-pane {
+  background: var(--bg-root);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.mannequin-pane-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.mannequin-svg {
+  width: 100%;
+  height: 126px;
+  display: block;
+}
+
+.pose-coach-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dotbook-pose-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dotbook-pose-sets {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
 }
 
 .transport-row {
