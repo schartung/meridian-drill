@@ -5,7 +5,13 @@ import {
   parseShowBundle,
   serializeShowBundle
 } from '../core/collaboration.ts';
+import { getFieldSpec } from '../core/fields.ts';
+import {
+  getTransitionWindow,
+  interpolateShowAtPosition
+} from '../core/interpolation.ts';
 import { DrillShow } from '../core/types.ts';
+import { MannequinPoseCard } from './MannequinPoseCard.tsx';
 
 interface DotBookModalProps {
   show: DrillShow;
@@ -35,11 +41,24 @@ export const DotBookModal: React.FC<DotBookModalProps> = ({
       ? initialPerformerId
       : show.performers[0]!.id
   );
+  const [previewSetIndex, setPreviewSetIndex] = useState<number>(0);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   const dotBook = useMemo(
     () => generatePerformerDotBook(show, performerId),
     [show, performerId]
+  );
+
+  const field = useMemo(() => getFieldSpec(show.fieldStandardId), [show.fieldStandardId]);
+  const previewWin = getTransitionWindow(show, previewSetIndex);
+  const previewMaxCounts = previewWin ? previewWin.counts : 0;
+  const previewCount = previewMaxCounts > 0 ? Math.min(2, previewMaxCounts * 0.25) : 0;
+  const previewState = useMemo(
+    () =>
+      interpolateShowAtPosition(show, previewSetIndex, previewCount, field)[
+        dotBook.performer.id
+      ],
+    [show, previewSetIndex, previewCount, field, dotBook.performer.id]
   );
 
   const handleCopyMarkdown = async () => {
@@ -150,6 +169,33 @@ export const DotBookModal: React.FC<DotBookModalProps> = ({
             </div>
           )}
 
+          {previewState && (
+            <div className="dotbook-pose-preview">
+              <div className="dotbook-pose-sets">
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 4 }}>
+                  Pose Preview:
+                </span>
+                {show.sets.map((s, idx) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`mini-btn ${previewSetIndex === idx ? 'accent' : ''}`}
+                    onClick={() => setPreviewSetIndex(idx)}
+                  >
+                    Set {idx + 1} ({s.rehearsalMark})
+                  </button>
+                ))}
+              </div>
+              <MannequinPoseCard
+                performer={dotBook.performer}
+                state={previewState}
+                setName={show.sets[previewSetIndex]?.name ?? 'Set 1'}
+                countOffset={previewCount}
+                maxCounts={previewMaxCounts}
+              />
+            </div>
+          )}
+
           <table className="dotbook-table">
             <thead>
               <tr>
@@ -159,6 +205,7 @@ export const DotBookModal: React.FC<DotBookModalProps> = ({
                 <th>Horizontal (Side / Yard)</th>
                 <th>Front-to-Back</th>
                 <th>Stride &amp; Path</th>
+                <th>Body &amp; Horn Visuals</th>
                 <th>Dress Neighbors</th>
                 <th>Sound Lag</th>
               </tr>
@@ -187,6 +234,9 @@ export const DotBookModal: React.FC<DotBookModalProps> = ({
                     <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
                       {entry.pathTypeText}
                     </div>
+                  </td>
+                  <td style={{ fontSize: 11.5, color: '#e2e8f0' }}>
+                    {entry.bodySummaryText}
                   </td>
                   <td className="mono" style={{ fontSize: 11 }}>
                     {[
