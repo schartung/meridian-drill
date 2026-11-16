@@ -25,6 +25,7 @@ npm run verify
 - **Sub-Count Physics & Acoustic Radar:** Scans transitions every `0.25` counts for head-on collisions, equipment pinches, extreme stride spikes, high-momentum direction-reversal whiplash, and temperature-dependent acoustic arrival lag (`ms`).
 - **AI Intent Lens & Reversible Solver Harness:** Run natural-language commands (`Cmd/Ctrl + K`) or 1-click fixes (`Optimize Dot Assignment`, `Curve Pass-Through Collisions`, `Stage Brass Arc`, `Company Front`, `Compact Acoustic Delay <55ms`). Every run logs a materialized receipt with before/after deltas and lossless 1-click revert.
 - **Multi-Camera 2D + 3D Studio Viewport:** Switch between `2D Tactical` (`1`), `3D Judge High-Cam` (`2`), `3D Tech Box` (`3`), and `Performer POV` (`4`) with drag-to-orbit camera controls.
+- **Body Control, Posture Markers & Movement Coach:** Encode 8 core postures (kneels, lunges, plie, jazz run, contrapposto), 5 horn/equipment angles, independent upper-body facing, and count-based sequential ripples directly on 2D/3D field markers, taught outside the field view through a live-synced Front + Side Mannequin Coach Card, a clickable Timeline Phrase Strip, and Dot-Book breakdowns.
 - **Rehearsal Collaboration & Dot-Books:** Switch between `Designer`, `Field Tech`, and `Performer` roles, drop count-anchored Field Pins on turf, export Markdown Rehearsal Triage Sheets, inspect individual Performer Dot-Books, and share portable `.meridian.json` bundles.
 
 ## Keyboard Shortcuts
