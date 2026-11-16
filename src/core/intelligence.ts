@@ -1,3 +1,4 @@
+import { POSTURE_SPECS, resolvePerformerBodyState } from './choreography.ts';
 import { getFieldSpec } from './fields.ts';
 import {
   computeSegmentArcLengthMeters,
@@ -8,6 +9,7 @@ import {
 } from './interpolation.ts';
 import {
   AcousticReport,
+  BodyTransitionAlert,
   CanonicalPoint,
   CollisionIssue,
   DrillShow,
@@ -223,6 +225,68 @@ export function analyzeSetAcoustics(
   };
 }
 
+export function analyzeBodyTransitions(
+  show: DrillShow
+): BodyTransitionAlert[] {
+  const field = getFieldSpec(show.fieldStandardId);
+  const alerts: BodyTransitionAlert[] = [];
+
+  for (let i = 0; i < show.sets.length - 2; i++) {
+    const winCurr = getTransitionWindow(show, i);
+    const winNext = getTransitionWindow(show, i + 1);
+    if (!winCurr || !winNext || winCurr.counts <= 0 || winNext.counts <= 0) {
+      continue;
+    }
+
+    for (const perf of show.performers) {
+      const endDot = winCurr.toSet.positions[perf.id];
+      const nextDot = winNext.toSet.positions[perf.id];
+      if (!endDot || !nextDot) continue;
+
+      const endingBody = resolvePerformerBodyState(
+        perf,
+        winCurr.fromSet,
+        winCurr.counts,
+        winCurr.counts,
+        endDot,
+        -Math.PI / 2,
+        false
+      );
+
+      if (
+        endingBody.posture !== 'KNEEL_RIGHT' &&
+        endingBody.posture !== 'BOW_DROP'
+      ) {
+        continue;
+      }
+
+      const nextArcLen = computeSegmentArcLengthMeters(endDot, nextDot);
+      if (nextArcLen < 0.05) continue;
+      const nextStepsPerFive =
+        field.majorLineSpacingMeters / (nextArcLen / winNext.counts);
+      if (nextStepsPerFive < 7.0) {
+        const postureName = POSTURE_SPECS[endingBody.posture].label;
+        const severity =
+          nextStepsPerFive < 5.5 || perf.weightFactor >= 1.3
+            ? 'CRITICAL'
+            : 'WARNING';
+        alerts.push({
+          id: `body-${i}-${perf.id}`,
+          severity,
+          fromSetIndex: i + 1,
+          toSetIndex: i + 2,
+          performerId: perf.id,
+          endingPosture: endingBody.posture,
+          nextStepsPerFive,
+          message: `${perf.label} ends Set ${i + 1}->${i + 2} in ${postureName} and immediately moves at ${nextStepsPerFive.toFixed(1)}-to-5 without standing recovery counts.`
+        });
+      }
+    }
+  }
+
+  return alerts;
+}
+
 export function analyzeShowIntelligence(
   show: DrillShow,
   inspectedSetIndex = 0
@@ -346,6 +410,7 @@ export function analyzeShowIntelligence(
   collisions.sort((a, b) => a.minDistanceMeters - b.minDistanceMeters);
   strideAlerts.sort((a, b) => a.stepsPerFive - b.stepsPerFive);
   whiplashAlerts.sort((a, b) => b.momentumScore - a.momentumScore);
+  const bodyAlerts = analyzeBodyTransitions(show);
 
   const acoustic = analyzeSetAcoustics(show, inspectedSetIndex);
 
@@ -362,6 +427,7 @@ export function analyzeShowIntelligence(
     5 * criticalStrides -
     2 * warningStrides -
     4 * whiplashAlerts.length -
+    3 * bodyAlerts.length -
     0.5 * totalCrossings;
   if (acoustic.tearRisk === 'HIGH') {
     rawScore -= 8;
@@ -374,6 +440,7 @@ export function analyzeShowIntelligence(
     collisions,
     strideAlerts,
     whiplashAlerts,
+    bodyAlerts,
     acoustic,
     crossingCountsByTransition
   };
