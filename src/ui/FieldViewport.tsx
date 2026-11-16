@@ -35,6 +35,7 @@ export interface ViewportOverlays {
   paths: boolean;
   acousticRings: boolean;
   collisions: boolean;
+  bodyVisuals: boolean;
   labels: boolean;
   snapHalfStep: boolean;
 }
@@ -493,37 +494,142 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
         const dimmed = sectionFilter !== 'ALL' && perf.section !== sectionFilter;
         const isSel = selectedSet.has(perf.id);
         const color = SECTION_COLORS[perf.section];
+        const bs = state.bodyState;
 
         ctx.save();
         ctx.globalAlpha = dimmed ? 0.2 : 1.0;
 
-        // Heading indicator vector when moving
+        // Ripple / Snap Activation Halo
+        if (overlays.bodyVisuals && bs.isPulseActive) {
+          ctx.save();
+          ctx.strokeStyle = `rgba(254, 240, 138, ${0.95 - bs.pulseProgress * 0.7})`;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.arc(sp.u, sp.v, 8 + bs.pulseProgress * 8, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Heading indicator vector when moving (Foot Travel Direction)
         if (state.isMoving) {
           const hx = sp.u + Math.cos(state.headingRad) * 11;
           const hy = sp.v - Math.sin(state.headingRad) * 11;
           ctx.strokeStyle = color;
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
           ctx.moveTo(sp.u, sp.v);
           ctx.lineTo(hx, hy);
           ctx.stroke();
         }
 
+        // Upper-body shoulder T-bar & Horn/Equipment Projection Tick
+        if (overlays.bodyVisuals) {
+          const ux = Math.cos(bs.upperFacingRad);
+          const uy = -Math.sin(bs.upperFacingRad);
+          const px = -uy;
+          const py = ux;
+          const isActiveProject =
+            bs.hornCarriage === 'HORNS_BOX' ||
+            bs.hornCarriage === 'HORNS_SNAP_UP' ||
+            bs.hornCarriage === 'HIGH_BELL_EXTENSION';
+          const barHalf = isSel ? 7.5 : 6.2;
+
+          ctx.strokeStyle = isActiveProject ? '#fef08a' : '#94a3b8';
+          ctx.lineWidth = isActiveProject ? 1.8 : 1.1;
+          ctx.beginPath();
+          ctx.moveTo(sp.u - px * barHalf, sp.v - py * barHalf);
+          ctx.lineTo(sp.u + px * barHalf, sp.v + py * barHalf);
+          ctx.stroke();
+
+          if (isActiveProject) {
+            const tickLen = bs.hornCarriage === 'HIGH_BELL_EXTENSION' ? 10 : 7.5;
+            ctx.beginPath();
+            ctx.moveTo(sp.u, sp.v);
+            ctx.lineTo(sp.u + ux * tickLen, sp.v + uy * tickLen);
+            ctx.stroke();
+          }
+        }
+
         if (isSel) {
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 2.2;
           ctx.beginPath();
-          ctx.arc(sp.u, sp.v, 8.5, 0, Math.PI * 2);
+          ctx.arc(sp.u, sp.v, 9.5, 0, Math.PI * 2);
           ctx.stroke();
         }
 
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(sp.u, sp.v, isSel ? 5.2 : 4.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#070b12';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        const shape = overlays.bodyVisuals ? bs.markerShape2d : 'CIRCLE';
+        const baseR = isSel ? 5.2 : 4.2;
+
+        if (shape === 'DIAMOND') {
+          const r = baseR + 1.4;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(sp.u, sp.v - r);
+          ctx.lineTo(sp.u + r, sp.v);
+          ctx.lineTo(sp.u, sp.v + r);
+          ctx.lineTo(sp.u - r, sp.v);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#070b12';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          // Hollow core signaling lower elevation (kneel / bow)
+          ctx.fillStyle = '#070b12';
+          ctx.beginPath();
+          ctx.arc(sp.u, sp.v, 1.9, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (shape === 'CAPSULE') {
+          ctx.save();
+          ctx.translate(sp.u, sp.v);
+          const tilt =
+            bs.posture === 'LUNGE_LEFT'
+              ? -0.35
+              : bs.posture === 'LUNGE_RIGHT'
+                ? 0.35
+                : bs.posture === 'CONTRAPPOSTO_LEAN'
+                  ? 0.55
+                  : 0;
+          ctx.rotate(tilt);
+          const w = isSel ? 12.0 : 10.2;
+          const h = isSel ? 6.0 : 5.2;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.roundRect(-w / 2, -h / 2, w, h, h / 2);
+          ctx.fill();
+          ctx.strokeStyle = '#070b12';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        } else if (shape === 'CHEVRON') {
+          ctx.save();
+          ctx.translate(sp.u, sp.v);
+          const angle = state.isMoving
+            ? Math.atan2(-Math.sin(state.headingRad), Math.cos(state.headingRad))
+            : Math.PI / 2;
+          ctx.rotate(angle);
+          const r = baseR + 1.6;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(r, 0);
+          ctx.lineTo(-r * 0.85, -r * 0.8);
+          ctx.lineTo(-r * 0.35, 0);
+          ctx.lineTo(-r * 0.85, r * 0.8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#070b12';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(sp.u, sp.v, baseR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#070b12';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
 
         if (overlays.labels || isSel) {
           ctx.font = isSel
@@ -531,7 +637,7 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
             : '600 9px "SF Mono", monospace';
           ctx.fillStyle = isSel ? '#ffffff' : 'rgba(241, 245, 249, 0.85)';
           ctx.textAlign = 'center';
-          ctx.fillText(perf.label, sp.u, sp.v - 8);
+          ctx.fillText(perf.label, sp.u, sp.v - 10);
         }
         ctx.restore();
       }
@@ -785,16 +891,46 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
           }
           const st = interpolated[perf.id];
           if (!st) return null;
+          const bs = st.bodyState;
+          const useBody = overlays.bodyVisuals;
+          const elev = useBody ? bs.elevationMeters : 1.72;
+          const lx = useBody ? bs.leanXMeters : 0;
+          const ly = useBody ? bs.leanYMeters : 0;
+
           const base = proj(st.xMeters, st.yMeters, 0);
-          const head = proj(st.xMeters, st.yMeters, 1.72);
+          const head = proj(st.xMeters + lx, st.yMeters + ly, elev);
           if (!base || !head) return null;
-          return { perf, st, base, head };
+
+          const knee =
+            useBody && bs.posture === 'KNEEL_RIGHT'
+              ? proj(st.xMeters + 0.14, st.yMeters - 0.16, 0.48)
+              : null;
+
+          let hornOrigin = null;
+          let hornTip = null;
+          if (useBody) {
+            const ux = Math.cos(bs.upperFacingRad);
+            const uy = Math.sin(bs.upperFacingRad);
+            const tiltRad = (bs.hornAngleDeg * Math.PI) / 180;
+            const horizReach = Math.cos(tiltRad) * 0.72;
+            const vertReach = Math.sin(tiltRad) * 0.72;
+            const chestZ = elev * 0.78;
+            hornOrigin = proj(st.xMeters + lx * 0.75, st.yMeters + ly * 0.75, chestZ);
+            hornTip = proj(
+              st.xMeters + lx * 0.75 + ux * horizReach,
+              st.yMeters + ly * 0.75 + uy * horizReach,
+              Math.max(0.25, chestZ + vertReach)
+            );
+          }
+
+          return { perf, st, base, head, knee, hornOrigin, hornTip };
         })
         .filter((x): x is NonNullable<typeof x> => x !== null)
         .sort((a, b) => b.base.depth - a.base.depth);
 
       for (const item of renderItems) {
-        const { perf, base, head } = item;
+        const { perf, st, base, head, knee, hornOrigin, hornTip } = item;
+        const bs = st.bodyState;
         const dimmed = sectionFilter !== 'ALL' && perf.section !== sectionFilter;
         const isSel = selectedSet.has(perf.id);
         const color = SECTION_COLORS[perf.section];
@@ -803,6 +939,23 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
 
         ctx.save();
         ctx.globalAlpha = dimmed ? 0.22 : 1.0;
+
+        // 3D Ripple activation ring on turf
+        if (overlays.bodyVisuals && bs.isPulseActive) {
+          ctx.strokeStyle = `rgba(254, 240, 138, ${0.9 - bs.pulseProgress * 0.65})`;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.ellipse(
+            base.u,
+            base.v,
+            bodyRadius * (2.6 + bs.pulseProgress * 2.0),
+            bodyRadius * (1.05 + bs.pulseProgress * 0.85),
+            0,
+            0,
+            Math.PI * 2
+          );
+          ctx.stroke();
+        }
 
         // Shadow on turf
         ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
@@ -818,14 +971,32 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
           ctx.stroke();
         }
 
-        // Uniform torso column
+        // Uniform torso column (bent through knee when kneeling)
         ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = Math.max(2, bodyRadius * 1.15);
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(base.u, base.v - heightPx * 0.08);
-        ctx.lineTo(head.u, head.v + heightPx * 0.16);
+        ctx.moveTo(base.u, base.v - heightPx * 0.06);
+        if (knee) {
+          ctx.lineTo(knee.u, knee.v);
+        }
+        ctx.lineTo(head.u, head.v + heightPx * 0.14);
         ctx.stroke();
+
+        // 3D Horn / Equipment projection vector
+        if (hornOrigin && hornTip) {
+          const isBright =
+            bs.hornCarriage === 'HORNS_BOX' ||
+            bs.hornCarriage === 'HORNS_SNAP_UP' ||
+            bs.hornCarriage === 'HIGH_BELL_EXTENSION';
+          ctx.strokeStyle = isBright ? '#fef08a' : '#94a3b8';
+          ctx.lineWidth = Math.max(1.4, bodyRadius * 0.65);
+          ctx.beginPath();
+          ctx.moveTo(hornOrigin.u, hornOrigin.v);
+          ctx.lineTo(hornTip.u, hornTip.v);
+          ctx.stroke();
+        }
 
         // Section plume / shako crown
         ctx.fillStyle = color;
@@ -1258,6 +1429,10 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
                 ).toFixed(1)}{' '}
                 ms
               </strong>
+            </span>
+            <span>
+              Body: <strong style={{ color: '#fef08a' }}>{focusedState.bodyState.postureLabel}</strong>{' '}
+              ({focusedState.bodyState.hornLabel})
             </span>
             {selectedIds.length > 1 && (
               <span style={{ color: '#22d3ee' }}>
