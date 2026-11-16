@@ -10,9 +10,14 @@ import {
 } from '../src/core/collaboration.ts';
 import { createDemoShow } from '../src/core/demoShow.ts';
 import { FIELD_SPECS } from '../src/core/fields.ts';
-import { analyzeShowIntelligence } from '../src/core/intelligence.ts';
+import { executeHarnessLens } from '../src/core/harness.ts';
+import {
+  analyzeShowIntelligence,
+  analyzeTransitionCollisions,
+  countTransitionCrossings
+} from '../src/core/intelligence.ts';
 
-test('demo show maintains 64 performers across 7 sets with active physics alerts and pins', () => {
+test('demo show maintains 64 performers across 7 sets with calibrated solvable issues on Set 4 -> Set 5', () => {
   const show = createDemoShow();
   assert.equal(show.performers.length, 64);
   assert.equal(show.sets.length, 7);
@@ -27,10 +32,43 @@ test('demo show maintains 64 performers across 7 sets with active physics alerts
     }
   }
 
-  const intel = analyzeShowIntelligence(show, 4);
+  const initialIntel = analyzeShowIntelligence(show, 3);
   assert.ok(
-    intel.collisions.length > 0 || intel.crossingCountsByTransition.some((c) => c > 0),
-    'Demo show must exhibit realistic solvable collision/crossing issues on Set 4 -> Set 5'
+    initialIntel.cleanlinessScore >= 60 && initialIntel.cleanlinessScore < 90,
+    `Expected initial demo cleanlinessScore in [60, 90), got ${initialIntel.cleanlinessScore}`
+  );
+  assert.ok(analyzeTransitionCollisions(show, 3).length >= 1);
+  assert.ok(countTransitionCrossings(show, 3) >= 2);
+
+  // Step 1: Optimize section-locked dot assignment on Set 4 -> Set 5
+  const optRes = executeHarnessLens(show, {
+    kind: 'OPTIMIZE_ASSIGNMENT',
+    fromSetIndex: 3,
+    lockSections: true,
+    stridePower: 2.2
+  });
+  assert.equal(optRes.ok, true);
+  if (!optRes.ok) return;
+  assert.equal(countTransitionCrossings(optRes.updatedShow, 3), 0);
+
+  // Step 2: Curve remaining pass-through collisions on Set 4 -> Set 5
+  const defRes = executeHarnessLens(optRes.updatedShow, {
+    kind: 'DEFLECT_COLLISIONS',
+    fromSetIndex: 3,
+    minClearanceMeters: 1.25
+  });
+  assert.equal(defRes.ok, true);
+  if (!defRes.ok) return;
+  assert.equal(
+    analyzeTransitionCollisions(defRes.updatedShow, 3).filter(
+      (c) => c.severity === 'CRITICAL'
+    ).length,
+    0
+  );
+  const finalIntel = analyzeShowIntelligence(defRes.updatedShow, 3);
+  assert.ok(
+    finalIntel.cleanlinessScore >= 90,
+    `Expected final cleanlinessScore >= 90 after two-step AI Harness cleanup, got ${finalIntel.cleanlinessScore}`
   );
 });
 
