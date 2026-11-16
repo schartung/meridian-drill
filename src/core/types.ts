@@ -282,6 +282,22 @@ export interface HarnessRunReceipt {
   previousSetsSnapshot: DrillSet[];
 }
 
+export interface ShowAudioMeta {
+  trackLabel: string;
+  durationSeconds: number;
+  beatOffsetSeconds: number;
+  sourceKind: 'SYNTH_DEMO' | 'UPLOADED_FILE' | 'EXTRACTED_3DZ';
+}
+
+export interface YardLineCrossing {
+  countOffset: number;
+  xMeters: number;
+  kIndex: number;
+  lineLabel: string;
+  direction: 'TO_SIDE_1' | 'TO_SIDE_2';
+  compactText: string;
+}
+
 export interface DrillShow {
   id: string;
   title: string;
@@ -289,6 +305,7 @@ export interface DrillShow {
   fieldStandardId: FieldStandardId;
   comparisonFieldId?: FieldStandardId;
   ambientTempCelsius: number;
+  audioMeta?: ShowAudioMeta;
   performers: Performer[];
   sets: DrillSet[];
   pins: FieldPin[];
