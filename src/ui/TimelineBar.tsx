@@ -1,4 +1,5 @@
 import React from 'react';
+import { getPerformerPhraseBlocks, POSTURE_SPECS } from '../core/choreography.ts';
 import { getSetStartGlobalCount, getTotalShowCounts } from '../core/interpolation.ts';
 import { DrillShow } from '../core/types.ts';
 
@@ -9,9 +10,11 @@ interface TimelineBarProps {
   isPlaying: boolean;
   playbackSpeed: number;
   audioEnabled: boolean;
+  focusedPerformerId: string;
   onTogglePlay: () => void;
   onStepCount: (delta: number) => void;
   onSelectSet: (setIndex: number) => void;
+  onJumpToCountOffset: (countOffset: number) => void;
   onScrubGlobalCount: (globalCount: number) => void;
   onChangeSpeed: (speed: number) => void;
   onToggleAudio: () => void;
@@ -24,9 +27,11 @@ export const TimelineBar: React.FC<TimelineBarProps> = ({
   isPlaying,
   playbackSpeed,
   audioEnabled,
+  focusedPerformerId,
   onTogglePlay,
   onStepCount,
   onSelectSet,
+  onJumpToCountOffset,
   onScrubGlobalCount,
   onChangeSpeed,
   onToggleAudio
@@ -39,6 +44,13 @@ export const TimelineBar: React.FC<TimelineBarProps> = ({
   const currentSet = show.sets[activeSetIndex]!;
   const nextSet = show.sets[activeSetIndex + 1];
   const transitionCounts = nextSet ? nextSet.counts : 0;
+  const focusedPerf =
+    show.performers.find((p) => p.id === focusedPerformerId) ?? show.performers[0]!;
+  const phraseBlocks = getPerformerPhraseBlocks(
+    focusedPerf,
+    currentSet,
+    transitionCounts
+  );
 
   return (
     <footer className="timeline-bar">
@@ -125,6 +137,34 @@ export const TimelineBar: React.FC<TimelineBarProps> = ({
             <option value={1.5}>1.5x</option>
           </select>
         </div>
+      </div>
+
+      <div className="phrase-strip" aria-label="Performer Movement Phrase Strip">
+        <span className="phrase-owner mono">{focusedPerf.label} Body:</span>
+        {phraseBlocks.map((b, i) => {
+          const isActive =
+            countOffset >= b.startCount - 1e-4 &&
+            (countOffset < b.endCount - 1e-4 ||
+              transitionCounts <= 0 ||
+              Math.abs(countOffset - b.endCount) < 1e-4);
+          return (
+            <button
+              key={`${b.cueId ?? 'base'}-${i}`}
+              type="button"
+              className={`phrase-pill ${isActive ? 'active' : ''}`}
+              onClick={() => onJumpToCountOffset(b.triggerCount)}
+              title="Jump timeline to this movement phrase"
+            >
+              <span className="mono">
+                {transitionCounts > 0
+                  ? `${b.startCount.toFixed(1)}-${b.endCount.toFixed(1)}ct`
+                  : 'Anchor'}
+              </span>
+              <span>{POSTURE_SPECS[b.posture].shortCode}</span>
+              <span>· {b.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="set-pills-track">
