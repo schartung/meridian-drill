@@ -605,10 +605,10 @@ export const App: React.FC = () => {
           <div className="control-group" role="group" aria-label="Camera Presets">
             {(
               [
-                ['TOP_2D', '2D Tactical'],
+                ['TOP_2D', '2D Field'],
                 ['HIGH_CAM_JUDGE', '3D Judge'],
                 ['BOX_SCAFFOLD', '3D Box'],
-                ['PERFORMER_POV', 'Performer POV']
+                ['PERFORMER_POV', 'POV']
               ] as Array<[CameraPresetId, string]>
             ).map(([presetId, label]) => (
               <button
@@ -653,6 +653,7 @@ export const App: React.FC = () => {
           <button
             type="button"
             className="action-btn"
+            title="Reset Demo Show"
             onClick={() => {
               const fresh = createDemoShow();
               audioTrackRef.current?.clear();
@@ -668,7 +669,7 @@ export const App: React.FC = () => {
               setLastFeedback(null);
             }}
           >
-            Reset Demo
+            Reset
           </button>
         </div>
       </header>
