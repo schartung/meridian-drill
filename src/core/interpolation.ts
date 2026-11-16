@@ -1,3 +1,4 @@
+import { resolvePerformerBodyState } from './choreography.ts';
 import {
   CanonicalPoint,
   DrillSet,
@@ -225,6 +226,15 @@ export function interpolateShowAtPosition(
     const activeSet = show.sets[clampedSetIndex]!;
     for (const perf of show.performers) {
       const dot = activeSet.positions[perf.id] ?? { xMeters: 0, yMeters: 0 };
+      const bodyState = resolvePerformerBodyState(
+        perf,
+        activeSet,
+        0,
+        0,
+        { xMeters: dot.xMeters, yMeters: dot.yMeters },
+        -Math.PI / 2,
+        false
+      );
       result[perf.id] = {
         performerId: perf.id,
         xMeters: dot.xMeters,
@@ -233,7 +243,8 @@ export function interpolateShowAtPosition(
         speedMps: 0,
         stepsPerFive: Infinity,
         stepLengthMeters: 0,
-        isMoving: false
+        isMoving: false,
+        bodyState
       };
     }
     return result;
@@ -261,6 +272,16 @@ export function interpolateShowAtPosition(
         ? Math.atan2(tangent.yMeters, tangent.xMeters)
         : -Math.PI / 2;
 
+    const bodyState = resolvePerformerBodyState(
+      perf,
+      window.fromSet,
+      countOffset,
+      window.counts,
+      pos,
+      headingRad,
+      isMoving
+    );
+
     result[perf.id] = {
       performerId: perf.id,
       xMeters: pos.xMeters,
@@ -269,7 +290,8 @@ export function interpolateShowAtPosition(
       speedMps,
       stepsPerFive,
       stepLengthMeters,
-      isMoving
+      isMoving,
+      bodyState
     };
   }
 
