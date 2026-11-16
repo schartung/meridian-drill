@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioPulseEngine } from './core/audioPulse.ts';
 import {
+  AudioTrackController,
+  getTotalShowDurationSeconds,
+  globalCountToSeconds,
+  secondsToGlobalCount,
+  synthesizeShowEnsemblePcm
+} from './core/audioSync.ts';
+import {
   exportRehearsalTriageMarkdown,
   parseShowBundle,
   serializeShowBundle
@@ -40,7 +47,8 @@ import {
   HarnessRunReceipt,
   PerformerDot,
   PinCategory,
-  SectionId
+  SectionId,
+  ShowAudioMeta
 } from './core/types.ts';
 import { DotBookModal } from './ui/DotBookModal.tsx';
 import {
@@ -48,11 +56,12 @@ import {
   ViewportOverlays,
   ViewportToolMode
 } from './ui/FieldViewport.tsx';
+import { ImportModal } from './ui/ImportModal.tsx';
 import { InspectorSidebar, InspectorTabId } from './ui/InspectorSidebar.tsx';
 import { IntentCommandBar } from './ui/IntentCommandBar.tsx';
 import { TimelineBar } from './ui/TimelineBar.tsx';
 
-const STORAGE_KEY = 'meridian_drill_v1_1_state';
+const STORAGE_KEY = 'meridian_drill_v1_2_state';
 
 function loadInitialShow(): DrillShow {
   try {
@@ -74,6 +83,9 @@ export const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(false);
+  const [waveformPeaks, setWaveformPeaks] = useState<Float32Array | null>(null);
+  const [audioTrackLabel, setAudioTrackLabel] = useState<string | null>(null);
+  const [audioTrackMuted, setAudioTrackMuted] = useState<boolean>(false);
 
   const [cameraPreset, setCameraPreset] = useState<CameraPresetId>('TOP_2D');
   const [collaboratorRole, setCollaboratorRole] = useState<CollaboratorRole>('DESIGNER');
@@ -84,6 +96,7 @@ export const App: React.FC = () => {
   const [inspectorTab, setInspectorTab] = useState<InspectorTabId>('INTELLIGENCE');
   const [highlightedPinId, setHighlightedPinId] = useState<string | null>(null);
   const [dotBookOpen, setDotBookOpen] = useState<boolean>(false);
+  const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
 
   const [overlays, setOverlays] = useState<ViewportOverlays>({
     paths: true,
@@ -107,6 +120,10 @@ export const App: React.FC = () => {
   if (!audioRef.current) {
     audioRef.current = new AudioPulseEngine();
   }
+  const audioTrackRef = useRef<AudioTrackController | null>(null);
+  if (!audioTrackRef.current) {
+    audioTrackRef.current = new AudioTrackController();
+  }
 
   useEffect(() => {
     try {
@@ -129,7 +146,74 @@ export const App: React.FC = () => {
     }
   }, [selectedIds]);
 
-  // Playback animation loop
+  const handleSynthDemoAudio = useCallback(() => {
+    const controller = audioTrackRef.current;
+    if (!controller) return;
+    setIsPlaying(false);
+    const stem = synthesizeShowEnsemblePcm(show);
+    const trackLabel = 'Synth Brass + Battery Stem';
+    const loaded = controller.loadFromPcm(
+      stem.samples,
+      stem.sampleRate,
+      trackLabel,
+      'SYNTH_DEMO',
+      stem.drillDurationSeconds
+    );
+    setWaveformPeaks(loaded.peaks);
+    setAudioTrackLabel(trackLabel);
+    setAudioTrackMuted(false);
+    setShow((prev) => ({
+      ...prev,
+      audioMeta: {
+        trackLabel,
+        durationSeconds: loaded.durationSeconds,
+        beatOffsetSeconds: 0,
+        sourceKind: 'SYNTH_DEMO'
+      }
+    }));
+    setLastFeedback({
+      ok: true,
+      text: `Synthesized variable-tempo Brass + Battery stem (${loaded.durationSeconds.toFixed(1)}s) synced across all sets.`
+    });
+  }, [show]);
+
+  const handleLoadAudioBytes = useCallback(
+    async (
+      bytes: ArrayBuffer,
+      filename: string,
+      sourceKind: ShowAudioMeta['sourceKind']
+    ) => {
+      const controller = audioTrackRef.current;
+      if (!controller) return;
+      setIsPlaying(false);
+      const drillDuration = getTotalShowDurationSeconds(show);
+      const loaded = await controller.loadFromEncodedBytes(
+        bytes,
+        filename,
+        sourceKind,
+        drillDuration
+      );
+      setWaveformPeaks(loaded.peaks);
+      setAudioTrackLabel(filename);
+      setAudioTrackMuted(false);
+      setShow((prev) => ({
+        ...prev,
+        audioMeta: {
+          trackLabel: filename,
+          durationSeconds: loaded.durationSeconds,
+          beatOffsetSeconds: prev.audioMeta?.beatOffsetSeconds ?? 0,
+          sourceKind
+        }
+      }));
+      setLastFeedback({
+        ok: true,
+        text: `Armed audio track "${filename}" (${loaded.durationSeconds.toFixed(1)}s) onto Timeline waveform.`
+      });
+    },
+    [show]
+  );
+
+  // Playback animation loop (hardware-synced to audio clock when track armed)
   const playStateRef = useRef({
     activeSetIndex,
     countOffset,
@@ -147,10 +231,22 @@ export const App: React.FC = () => {
     if (!isPlaying) return;
     let rafId = 0;
     let lastTs = performance.now();
-    let prevIntBeat = Math.floor(
+    const totalCounts = getTotalShowCounts(show);
+    const initGlobal =
       getSetStartGlobalCount(show, playStateRef.current.activeSetIndex) +
-        playStateRef.current.countOffset
-    );
+      playStateRef.current.countOffset;
+    const startGlobal = initGlobal >= totalCounts - 1e-4 ? 0 : initGlobal;
+    if (startGlobal !== initGlobal) {
+      setActiveSetIndex(0);
+      setCountOffset(0);
+    }
+    let prevIntBeat = Math.floor(startGlobal);
+
+    const track = audioTrackRef.current;
+    const useAudioClock = Boolean(track && track.hasTrack() && !audioTrackMuted);
+    if (useAudioClock && track) {
+      track.play(globalCountToSeconds(show, startGlobal), playbackSpeed);
+    }
 
     const tick = (now: number) => {
       const dt = Math.min((now - lastTs) / 1000, 0.08);
@@ -158,13 +254,16 @@ export const App: React.FC = () => {
 
       const { activeSetIndex: sIdx, countOffset: cOff, playbackSpeed: spd, audioEnabled: aud } =
         playStateRef.current;
-      const win = getTransitionWindow(show, sIdx);
-      const bpm = win ? win.tempoBpm : show.sets[sIdx]?.tempoBpm ?? 140;
-      const deltaCounts = dt * (bpm / 60) * spd;
-
-      const currentGlobal = getSetStartGlobalCount(show, sIdx) + cOff;
-      const totalCounts = getTotalShowCounts(show);
-      const nextGlobal = currentGlobal + deltaCounts;
+      let nextGlobal: number;
+      if (useAudioClock && track && track.isPlaying()) {
+        nextGlobal = secondsToGlobalCount(show, track.getCurrentSeconds());
+      } else {
+        const win = getTransitionWindow(show, sIdx);
+        const bpm = win ? win.tempoBpm : show.sets[sIdx]?.tempoBpm ?? 140;
+        const deltaCounts = dt * (bpm / 60) * spd;
+        const currentGlobal = getSetStartGlobalCount(show, sIdx) + cOff;
+        nextGlobal = currentGlobal + deltaCounts;
+      }
 
       if (nextGlobal >= totalCounts) {
         const endPos = globalCountToSetPosition(show, totalCounts);
@@ -188,8 +287,11 @@ export const App: React.FC = () => {
     };
 
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, show]);
+    return () => {
+      cancelAnimationFrame(rafId);
+      audioTrackRef.current?.stop();
+    };
+  }, [isPlaying, show, playbackSpeed, audioTrackMuted]);
 
   const handleRunLens = useCallback(
     (lens: DrillLensSpec) => {
@@ -361,6 +463,7 @@ export const App: React.FC = () => {
         setCountOffset(0);
       } else if (e.key === 'Escape') {
         setDotBookOpen(false);
+        setImportModalOpen(false);
         setSelectedIds([]);
       }
     };
@@ -535,6 +638,13 @@ export const App: React.FC = () => {
 
           <button
             type="button"
+            className="action-btn"
+            onClick={() => setImportModalOpen(true)}
+          >
+            Import
+          </button>
+          <button
+            type="button"
             className="action-btn primary"
             onClick={() => setDotBookOpen(true)}
           >
@@ -545,9 +655,15 @@ export const App: React.FC = () => {
             className="action-btn"
             onClick={() => {
               const fresh = createDemoShow();
+              audioTrackRef.current?.clear();
+              setWaveformPeaks(null);
+              setAudioTrackLabel(null);
+              setAudioTrackMuted(false);
               setShow(fresh);
               setActiveSetIndex(3);
               setCountOffset(0);
+              setSelectedIds(['B11']);
+              setPovPerformerId('B11');
               setIsPlaying(false);
               setLastFeedback(null);
             }}
@@ -601,11 +717,27 @@ export const App: React.FC = () => {
                 <div className="rail-btn-grid">
                   {(
                     [
-                      ['ALL', 'All (64)', '#f1f5f9'],
-                      ['BRASS', 'Brass (24)', '#f59e0b'],
-                      ['BATTERY', 'Battery (14)', '#22d3ee'],
-                      ['PIT', 'Front Pit (10)', '#a78bfa'],
-                      ['GUARD', 'Guard (16)', '#fb7185']
+                      ['ALL', `All (${show.performers.length})`, '#f1f5f9'],
+                      [
+                        'BRASS',
+                        `Brass (${show.performers.filter((p) => p.section === 'BRASS').length})`,
+                        '#f59e0b'
+                      ],
+                      [
+                        'BATTERY',
+                        `Battery (${show.performers.filter((p) => p.section === 'BATTERY').length})`,
+                        '#22d3ee'
+                      ],
+                      [
+                        'PIT',
+                        `Front Pit (${show.performers.filter((p) => p.section === 'PIT').length})`,
+                        '#a78bfa'
+                      ],
+                      [
+                        'GUARD',
+                        `Guard (${show.performers.filter((p) => p.section === 'GUARD').length})`,
+                        '#fb7185'
+                      ]
                     ] as Array<[SectionId | 'ALL', string, string]>
                   ).map(([sec, label, dotColor]) => (
                     <button
@@ -818,6 +950,9 @@ export const App: React.FC = () => {
         isPlaying={isPlaying}
         playbackSpeed={playbackSpeed}
         audioEnabled={audioEnabled}
+        waveformPeaks={waveformPeaks}
+        audioTrackLabel={audioTrackLabel}
+        audioTrackMuted={audioTrackMuted}
         focusedPerformerId={selectedIds[0] ?? show.performers[0]!.id}
         onTogglePlay={() => setIsPlaying((p) => !p)}
         onStepCount={(delta) => {
@@ -846,18 +981,50 @@ export const App: React.FC = () => {
         }}
         onChangeSpeed={setPlaybackSpeed}
         onToggleAudio={() => setAudioEnabled((a) => !a)}
+        onSynthDemoAudio={handleSynthDemoAudio}
+        onToggleMuteTrack={() => setAudioTrackMuted((m) => !m)}
+        onOpenImportModal={() => setImportModalOpen(true)}
       />
 
       {dotBookOpen && (
         <DotBookModal
           show={show}
-          initialPerformerId={selectedIds[0] ?? 'B1'}
+          initialPerformerId={selectedIds[0] ?? show.performers[0]!.id}
           onClose={() => setDotBookOpen(false)}
           onImportShowBundle={(imported) => {
             setShow(imported);
             setActiveSetIndex(0);
             setCountOffset(0);
             setIsPlaying(false);
+          }}
+        />
+      )}
+
+      {importModalOpen && (
+        <ImportModal
+          activeShow={show}
+          onClose={() => setImportModalOpen(false)}
+          onLoadAudioBytes={handleLoadAudioBytes}
+          onApplyImportedShow={(imported) => {
+            setIsPlaying(false);
+            if (audioTrackRef.current?.getSourceKind() === 'SYNTH_DEMO') {
+              audioTrackRef.current.clear();
+              setWaveformPeaks(null);
+              setAudioTrackLabel(null);
+            }
+            const firstPerfId = imported.performers[0]?.id ?? 'B1';
+            const nextSelected = selectedIds.filter((id) =>
+              imported.performers.some((p) => p.id === id)
+            );
+            setSelectedIds(nextSelected.length > 0 ? nextSelected : [firstPerfId]);
+            setPovPerformerId(firstPerfId);
+            setShow(imported);
+            setActiveSetIndex(0);
+            setCountOffset(0);
+            setLastFeedback({
+              ok: true,
+              text: `Imported "${imported.title}" (${imported.performers.length} performers across ${imported.sets.length} sets).`
+            });
           }}
         />
       )}
