@@ -432,14 +432,19 @@ export const TimelineBar: React.FC<TimelineBarProps> = ({
               onClick={() => onSelectSet(idx)}
             >
               <div className="set-pill-top">
-                <span>
+                <span style={{ whiteSpace: 'nowrap' }}>
                   Set {idx + 1} ({set.rehearsalMark})
                 </span>
-                <span className="mono" style={{ fontSize: 10, color: 'var(--accent-cyan)' }}>
-                  {set.counts > 0 ? `${set.counts}ct · ${set.tempoBpm}` : `Anchor · ${set.tempoBpm}`}
+                <span
+                  className="mono"
+                  style={{ fontSize: 10, color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}
+                >
+                  {set.counts > 0 ? `${set.counts}ct` : 'Anchor'}
                 </span>
               </div>
-              <div className="set-pill-sub">{set.name.replace(/^Set \d+:\s*/, '')}</div>
+              <div className="set-pill-sub">
+                {set.tempoBpm} BPM · {set.name.replace(/^Set \d+:\s*/, '')}
+              </div>
             </button>
           );
         })}
