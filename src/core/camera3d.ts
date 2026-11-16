@@ -63,13 +63,17 @@ export function buildCameraState(
   let fovDeg = 46;
 
   if (preset === 'PERFORMER_POV' && povState) {
-    const baseYaw = povState.isMoving ? povState.headingRad : -Math.PI / 2;
+    const baseYaw = povState.bodyState
+      ? povState.bodyState.upperFacingRad
+      : povState.isMoving
+        ? povState.headingRad
+        : -Math.PI / 2;
     const lookYaw = baseYaw + orbitYawRad;
     const lookPitch = Math.min(0.45, Math.max(-0.55, orbitPitchRad));
     eye = {
-      x: povState.xMeters,
-      y: povState.yMeters,
-      z: 1.65
+      x: povState.xMeters + (povState.bodyState?.leanXMeters ?? 0),
+      y: povState.yMeters + (povState.bodyState?.leanYMeters ?? 0),
+      z: Math.max(0.85, (povState.bodyState?.elevationMeters ?? 1.72) - 0.07)
     };
     const cosP = Math.cos(lookPitch);
     target = {
