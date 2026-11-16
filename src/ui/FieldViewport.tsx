@@ -615,6 +615,26 @@ export const FieldViewport: React.FC<FieldViewportProps> = ({
       const halfW = field.widthMeters / 2;
       const fullHalfW = halfW + field.endzoneDepthMeters;
 
+      // Front Ensemble Pit Apron in 3D
+      const pitHalfW = halfW * 0.45;
+      const pit0 = proj(-pitHalfW, -field.pitDepthMeters, 0);
+      const pit1 = proj(pitHalfW, -field.pitDepthMeters, 0);
+      const pit2 = proj(pitHalfW, 0, 0);
+      const pit3 = proj(-pitHalfW, 0, 0);
+      if (pit0 && pit1 && pit2 && pit3) {
+        ctx.fillStyle = '#0d1926';
+        ctx.strokeStyle = 'rgba(167, 139, 250, 0.4)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(pit0.u, pit0.v);
+        ctx.lineTo(pit1.u, pit1.v);
+        ctx.lineTo(pit2.u, pit2.v);
+        ctx.lineTo(pit3.u, pit3.v);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
       // Render turf quad slices along X so perspective clipping stays clean
       const maxK = Math.round(halfW / field.majorLineSpacingMeters);
       for (let k = -maxK; k < maxK; k++) {
