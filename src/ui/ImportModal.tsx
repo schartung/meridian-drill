@@ -10,6 +10,11 @@ import {
   SAMPLE_PYWARE_COORDINATE_CSV
 } from '../core/importers.ts';
 import {
+  buildLibraryPresetImport,
+  LibraryShowId,
+  REAL_WORLD_SHOW_PRESETS
+} from '../core/showLibrary.ts';
+import {
   DrillShow,
   FieldStandardId,
   ShowAudioMeta
@@ -18,7 +23,7 @@ import {
 interface ImportModalProps {
   activeShow: DrillShow;
   onClose: () => void;
-  onApplyImportedShow: (show: DrillShow) => void;
+  onApplyImportedShow: (show: DrillShow, synthAudioOnApply?: boolean) => void;
   onLoadAudioBytes: (
     bytes: ArrayBuffer,
     filename: string,
@@ -45,8 +50,27 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   const [rawText, setRawText] = useState<string>('');
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [receipt, setReceipt] = useState<ImportDiagnosticReceipt | null>(null);
+  const [activePresetId, setActivePresetId] = useState<LibraryShowId | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
+
+  const handlePreviewPreset = (presetId: LibraryShowId) => {
+    const { preset, receipt: libReceipt, csvPreview } =
+      buildLibraryPresetImport(presetId);
+    setActivePresetId(presetId);
+    setTargetFieldId(libReceipt.importedShow?.fieldStandardId ?? 'NCAA_DCI');
+    setShowTitle(`${preset.ensemble} — ${preset.shortTitle}`);
+    setRawText(csvPreview);
+    setReceipt(libReceipt);
+    setActionMsg(null);
+  };
+
+  const handleImportPresetWithAudio = (presetId: LibraryShowId) => {
+    const { receipt: libReceipt } = buildLibraryPresetImport(presetId);
+    if (!libReceipt.importedShow) return;
+    onApplyImportedShow(libReceipt.importedShow, true);
+    onClose();
+  };
 
   const handleFile = async (file: File) => {
     setBusy(true);
@@ -213,9 +237,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     }
   };
 
-  const handleApplyShow = async () => {
+  const handleApplyShow = async (synthAudio = false) => {
     if (!receipt?.importedShow) return;
-    let nextShow = receipt.importedShow;
+    const nextShow = receipt.importedShow;
     if (receipt.extractedAudio) {
       try {
         await onLoadAudioBytes(
@@ -227,7 +251,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         // Keep show import proceeding even if extracted audio codec is unsupported by browser.
       }
     }
-    onApplyImportedShow(nextShow);
+    onApplyImportedShow(nextShow, synthAudio && !receipt.extractedAudio);
     onClose();
   };
 
@@ -259,6 +283,53 @@ export const ImportModal: React.FC<ImportModalProps> = ({
         </div>
 
         <div className="modal-body">
+          <div className="card">
+            <div className="card-title">
+              <span>Stored Real-Life Show Excerpts (Ready to Import)</span>
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                Reconstructed from public staging + Coordinate CSV
+              </span>
+            </div>
+            <div className="library-preset-grid">
+              {REAL_WORLD_SHOW_PRESETS.map((preset) => {
+                const isSelected = activePresetId === preset.id;
+                return (
+                  <div
+                    key={preset.id}
+                    className={`library-preset-card ${isSelected ? 'active' : ''}`}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div className="library-preset-meta">
+                        {preset.ensemble} · {preset.yearLabel}
+                      </div>
+                      <div className="library-preset-title">{preset.shortTitle}</div>
+                      <div className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {preset.metricsLine}
+                      </div>
+                      <div className="library-preset-desc">{preset.highlightNote}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="mini-btn"
+                        onClick={() => handlePreviewPreset(preset.id)}
+                      >
+                        Preview &amp; CSV
+                      </button>
+                      <button
+                        type="button"
+                        className="mini-btn accent"
+                        onClick={() => handleImportPresetWithAudio(preset.id)}
+                      >
+                        Import + Audio
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="form-grid">
             <div className="field-group">
               <label htmlFor="import-field-std">Target Field Standard (for step phrases)</label>
@@ -430,14 +501,25 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
               {(receipt.importedShow || receipt.extractedAudio) && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                  {receipt.importedShow && (
+                  {receipt.importedShow && !receipt.extractedAudio && (
                     <button
                       type="button"
                       className="action-btn primary"
-                      onClick={() => void handleApplyShow()}
+                      onClick={() => void handleApplyShow(true)}
                     >
                       {receipt.status === 'TEMPO_MAP_IMPORTED'
-                        ? 'Apply Tempo & Rehearsal Sync to Show'
+                        ? 'Apply Tempo Sync + Synth Audio'
+                        : 'Apply Show & Synth Audio'}
+                    </button>
+                  )}
+                  {receipt.importedShow && (
+                    <button
+                      type="button"
+                      className={receipt.extractedAudio ? 'action-btn primary' : 'action-btn'}
+                      onClick={() => void handleApplyShow(false)}
+                    >
+                      {receipt.status === 'TEMPO_MAP_IMPORTED'
+                        ? 'Apply Tempo & Rehearsal Sync'
                         : receipt.extractedAudio
                           ? 'Apply Imported Show & Arm Audio'
                           : 'Apply Imported Show'}
