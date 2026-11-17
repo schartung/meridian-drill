@@ -641,7 +641,7 @@ export const App: React.FC = () => {
             className="action-btn"
             onClick={() => setImportModalOpen(true)}
           >
-            Import
+            Import / Library
           </button>
           <button
             type="button"
@@ -1006,25 +1006,49 @@ export const App: React.FC = () => {
           activeShow={show}
           onClose={() => setImportModalOpen(false)}
           onLoadAudioBytes={handleLoadAudioBytes}
-          onApplyImportedShow={(imported) => {
+          onApplyImportedShow={(imported, synthAudioOnApply) => {
             setIsPlaying(false);
-            if (audioTrackRef.current?.getSourceKind() === 'SYNTH_DEMO') {
-              audioTrackRef.current.clear();
+            let nextShow = imported;
+            const controller = audioTrackRef.current;
+            if (synthAudioOnApply && controller) {
+              const stem = synthesizeShowEnsemblePcm(imported);
+              const trackLabel = `${imported.title} (Synth Stem)`;
+              const loaded = controller.loadFromPcm(
+                stem.samples,
+                stem.sampleRate,
+                trackLabel,
+                'SYNTH_DEMO',
+                stem.drillDurationSeconds
+              );
+              setWaveformPeaks(loaded.peaks);
+              setAudioTrackLabel(trackLabel);
+              setAudioTrackMuted(false);
+              nextShow = {
+                ...imported,
+                audioMeta: {
+                  trackLabel,
+                  durationSeconds: loaded.durationSeconds,
+                  beatOffsetSeconds: 0,
+                  sourceKind: 'SYNTH_DEMO'
+                }
+              };
+            } else if (controller?.getSourceKind() === 'SYNTH_DEMO') {
+              controller.clear();
               setWaveformPeaks(null);
               setAudioTrackLabel(null);
             }
-            const firstPerfId = imported.performers[0]?.id ?? 'B1';
+            const firstPerfId = nextShow.performers[0]?.id ?? 'B1';
             const nextSelected = selectedIds.filter((id) =>
-              imported.performers.some((p) => p.id === id)
+              nextShow.performers.some((p) => p.id === id)
             );
             setSelectedIds(nextSelected.length > 0 ? nextSelected : [firstPerfId]);
             setPovPerformerId(firstPerfId);
-            setShow(imported);
+            setShow(nextShow);
             setActiveSetIndex(0);
             setCountOffset(0);
             setLastFeedback({
               ok: true,
-              text: `Imported "${imported.title}" (${imported.performers.length} performers across ${imported.sets.length} sets).`
+              text: `Loaded "${nextShow.title}" (${nextShow.performers.length} performers across ${nextShow.sets.length} sets${synthAudioOnApply ? ' + variable-tempo audio stem' : ''}).`
             });
           }}
         />
